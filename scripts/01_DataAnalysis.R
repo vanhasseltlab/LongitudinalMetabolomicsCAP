@@ -54,6 +54,9 @@ psi.score.components <- c("nursing.home.resident",                "renal.disease
 # cov <- c("age", "sex", psi.score.components, "duration.of.symptoms.before.admission", 
 #               "antibiotic.treatment.before.admission", "COPD", "diabetes")
 
+# Save colnames
+save(nonmetrange, metrange, infection_markers, psi.score.components, file = "data/column_names.Rdata")
+
 ## Data cleaning --------------------------------------------------------------
 data.clean <- DataCleaning(data.reduced, metrange, nonmetrange)
 #Reset metrange after cleaning
