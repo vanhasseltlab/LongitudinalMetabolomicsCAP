@@ -34,6 +34,7 @@
     `hot`   = lei_cols("violet", "red", "orange"),
     `mixed` = lei_cols("blue", "lightblue", "turquoise", "darkgreen", "lightgreen", "orange", "red", "violet"),
     `two`   = lei_cols("red", "violet"), 
+    `five`  = lei_cols("blue", "lightblue", "orange", "red", "darkgreen"),
     `nine`  = lei_cols("lightblue", "violet", "brightgreen",  "brightblue", "red", "lightgreen", "blue", "orange", "darkgreen"))
   
   #' Return function to interpolate a lei color palette

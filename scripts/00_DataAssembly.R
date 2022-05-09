@@ -195,7 +195,8 @@ longitudinaldata <- alldata_corrected %>%
 
 
 ## Output data ----------------------------------------------------------------
-
+# All data
+write.csv2(alldata_corrected, file = "data/00_data_raw_all.csv", row.names = FALSE)
 #Longitudinal data
 write.csv2(longitudinaldata, file = "data/00_data_raw.csv", row.names = FALSE)
 

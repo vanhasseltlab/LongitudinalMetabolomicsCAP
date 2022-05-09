@@ -20,17 +20,23 @@
 # Load libraries
 # library(tidyverse)
 library(dplyr)
+library(foreign)
+
 # library(ggplot2)
 
 # Source functions
 source("functions/DataCleaning.R")
-# source("functions/LeidenColoring.R")
+source("functions/LeidenColoring.R")
 
 
 ## Input data -----------------------------------------------------------------
-dat.raw <- read.csv2("data/00_data_raw.csv")
 # Load metabolomics data after quality control
+dat.raw <- read.csv2("data/00_data_raw.csv")
+# Add additional patient data over time and remove redundant variables
 data.reduced <- read.csv2("data/00_data_reduced.csv")
+# longitudinal and additional clinical patient data: temperature, CRP, leukocyte count, creatinine etc. 
+infl.markers.longitudinal <- read.spss("data/raw/aanvullende data ilona 1762021.sav", 
+                                  use.value.labels = TRUE, to.data.frame = TRUE)
 
 # Define metabolite and metadata range in data after quality control
 nonmetrange <- c("sample.id", "subject.id", "day", "pathogen", "pathogen.group", "age", "sex", "psi.score", "nursing.home.resident",
@@ -78,7 +84,7 @@ data.pretreated[, metrange] <- apply(data.pretreated[, metrange], MARGIN = 2, FU
 ## Data summary --------------------------------------------------------------
 dat <- data.pretreated
 
-View(select(dat, subject, day))
+# View(select(dat, subject.id, day))
 
 
 ## Data imputation -----------------------------------------------------------
