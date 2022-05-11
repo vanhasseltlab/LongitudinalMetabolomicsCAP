@@ -3,50 +3,51 @@
 #### Remove redundant variables from raw data using reduction function ----
 ReduceData <- function(data.raw){
   metabolomicsdata <- data.raw[, 6:374]
-  patientdata <- select(data.raw, 
-                        "sample.id"= NMC.name, # Metabolomics sample id
-                        "sample.id.S" = SampleID, # Hospital sample id
-                        "subject.id" = Studynr, # Study patient id
-                        "day" = Day,
-                        "pathogen" = verwekker_1,
-                        "pathogen.group" = verwekker_groep, 
-                        "age" = leeftijd,  
-                        "sex" = geslacht,
-                        "psi.score" = Fine_klasse,
-                        "nursing.home.resident" = VPH, # verpleeghuisopname
-                        "renal.disease" = nierziekte,
-                        "liver.disease" = leverziekte,
-                        "congestive.heart.failure" = hartfalen,
-                        "cns.disease" = CNS,
-                        "malignancy" = maligniteit,
-                        "altered.mental.status" = verward, 
-                        "respiratory.rate" = Afreq,
-                        "systolic.blood.pressure" = RR_syst,
-                        "temperature" = temp,
-                        "pulse" = pols,
-                        "pH" = pH_0,
-                        "BUN" = ureum_0, # BUN = Blood Urea Nitrogen concentration
-                        "sodium" = natrium_0, 
-                        "glucose" = glucose_0,
-                        "hematocrit" = Ht_0,
-                        "partial.pressure.of.oxygen" = PO2_0,
-                        "pleural.effusion.on.x-ray" = Xth_pv,
-                        "race" = Ras, 
-                        "duration.of.symptoms.before.admission" = duur_sympt,
-                        "antibiotic.treatment.before.admission" = AB_thuis,
-                        "corticosteroid.use.before.admission" = med_cort,
-                        "COPD" = COPD, 
-                        "diabetes" = DM,
-                        "oxygen.saturation" = sat,
-                        "supplemental.oxygen.required" = O2,
-                        "antibiotics.started.in.hospital" = gestart_AB_ZH, 
-                        "CRP" = CRP_0, 
-                        "leukocyte count" = leuko_0,
-                        "IL-6" = IL6_0,
-                        "IL-10" = IL10_0)
+  patient_vars <- c("sample.id" = "NMC.name", # Metabolomics sample id
+                    "sample.id.S" = "SampleID", # Hospital sample id
+                    "subject.id" = "Studynr", # Study patient id
+                    "day" = "Day",
+                    "pathogen" = "verwekker_1",
+                    "pathogen.group" = "verwekker_groep", 
+                    "age" = "leeftijd",  
+                    "sex" = "geslacht",
+                    "psi.score" = "Fine_klasse",
+                    "nursing.home.resident" = "VPH", # verpleeghuisopname
+                    "renal.disease" = "nierziekte",
+                    "liver.disease" = "leverziekte",
+                    "congestive.heart.failure" = "hartfalen",
+                    "cns.disease" = "CNS",
+                    "malignancy" = "maligniteit",
+                    "altered.mental.status" = "verward", 
+                    "respiratory.rate" = "Afreq",
+                    "systolic.blood.pressure" = "RR_syst",
+                    "temperature" = "temp",
+                    "pulse" = "pols",
+                    "pH" = "pH_0",
+                    "BUN" = "ureum_0", # BUN = Blood Urea Nitrogen concentration
+                    "sodium" = "natrium_0", 
+                    "glucose" = "glucose_0",
+                    "hematocrit" = "Ht_0",
+                    "partial.pressure.of.oxygen" = "PO2_0",
+                    "pleural.effusion.on.x-ray" = "Xth_pv",
+                    "race" = "Ras", 
+                    "duration.of.symptoms.before.admission" = "duur_sympt",
+                    "antibiotic.treatment.before.admission" = "AB_thuis",
+                    "corticosteroid.use.before.admission" = "med_cort",
+                    "COPD" = "COPD", 
+                    "diabetes" = "DM",
+                    "oxygen.saturation" = "sat",
+                    "supplemental.oxygen.required" = "O2",
+                    "antibiotics.started.in.hospital" = "gestart_AB_ZH", 
+                    "CRP" = "CRP_0", 
+                    "leukocyte count" = "leuko_0",
+                    "IL-6" = "IL6_0",
+                    "IL-10" = "IL10_0",
+                    "hospitalization.time" = "Opnameduur")
+  
+  patientdata <- select(data.raw, all_of(patient_vars))
   
   data.reduced <- bind_cols(metabolomicsdata, patientdata)
-  
   
   data.reduced$pathogen.group <- revalue(data.reduced$pathogen.group, c(
     "Streptococcus pneumoniae" = "S. pneumoniae"))
@@ -63,29 +64,79 @@ ReduceData <- function(data.raw){
   data.reduced$sex <- revalue(data.reduced$sex, c("man" = "Male", "vrouw" = "Female"))
   data.reduced$race <- revalue(data.reduced$race, c("wit" = "White"))
   
-  data.reduced <- data.frame(lapply(data.reduced, function(x) { gsub("nee", "No", x) }))
-  data.reduced <- data.frame(lapply(data.reduced, function(x) { gsub("ja", "Yes", x) }))
+  ja_nee_columns <- which(apply(data.reduced, 2, function(x) any(x == "ja" | x == "nee", na.rm = T)))
+  
+  data.reduced[, ja_nee_columns] <- data.frame(lapply(data.reduced[, ja_nee_columns], function(x) { 
+    x <- gsub("nee", "No", x)
+    x <- gsub("ja", "Yes", x) 
+    return(x)
+  }))
+  
+  ## Calculate CURB score at day 0 for all patients (subject.id's) and add to reduced data
+  data.reduced$curb <- with(data.reduced, {
+    (BUN > 7) + (as.character(altered.mental.status) == "Yes") +
+    (respiratory.rate >= 30) + (systolic.blood.pressure < 90)})
+  
+  #make subject.id character
+  data.reduced$subject.id <- as.character(data.reduced$subject.id)
   
   # Define metabolite and metadata range in data after quality control
-  metadata <- c("sample.id", "sample.id.S", "subject.id", "day", "pathogen", "pathogen.group", "age", "sex", "psi.score", "nursing.home.resident",
-                "renal.disease", "liver.disease", "congestive.heart.failure", "cns.disease", "malignancy", "altered.mental.status",
-                "respiratory.rate", "systolic.blood.pressure", "temperature", "pulse", "pH" , "BUN" , "sodium", "glucose", 
-                "hematocrit", "partial.pressure.of.oxygen", "pleural.effusion.on.x.ray", "race", "duration.of.symptoms.before.admission",
-                "antibiotic.treatment.before.admission", "corticosteroid.use.before.admission", "COPD", "diabetes", 
-                "oxygen.saturation", "supplemental.oxygen.required", "antibiotics.started.in.hospital", "CRP", "leukocyte.count",
-                "IL.6", "IL.10")
-  
-  metrange <- setdiff(names(data.reduced), metadata)
-  
-  # Define metabolite data as numeric data for analysis
-  data.reduced[,metrange] <- apply(data.reduced[,metrange], 2, function(x) {
-    as.numeric(as.character(x))
-  })
+  metrange <- setdiff(names(data.reduced), c(names(patient_vars), "curb"))
+  attr(data.reduced, "metrange") <- metrange
   
   return(data.reduced)
 }
-
-
+DataCleaning <- function(dat, metrange) {
+  # This function removes samples (rows) with no metabolomics measurements in at 
+  # least one platform (>10 missing metabolites) and then removes metabolites 
+  # (columns) with missing values.
+  nonmetrange <-  setdiff(names(dat), metrange)
+  
+  # Subset metabolites from data
+  dat.subset <- dat[, metrange]
+  # Calculate the numer of NA's per row
+  narows <- apply(dat.subset, 1, function(X){sum(is.na(X))})
+  # Subset metabolomics data keeping only rows with les then 10 missing metabolites
+  dat.2 <- dat[narows < 10, ]
+  
+  # Subset metabolites from partly cleaned dataset
+  dat.subset.2 <- dat.2[, metrange]
+  # Calculate the numer of NA's per column
+  nacols <- apply(dat.subset.2, 2, function(X){sum(is.na(X))})
+  # keep column names of metabolites without missing metabolites
+  keep <- colnames(dat.subset.2[, nacols==0])
+  
+  # Combine cleaned metabolomicsdat with non-metabolomicsdat 
+  #  and return clean dat set.
+  dat.clean <- cbind(dat.2[, keep], dat.2[, nonmetrange])
+  attr(dat.clean, "metrange") <- keep
+  
+  return(dat.clean)
+}
+DataPretreatment <- function(dat, metrange, scaling = "auto") {
+  # This function applies log transformation and auto or pareto scaling to metabolite data
+  nonmetrange <-  setdiff(names(dat), metrange)
+  # Log2 transformation of metabolite values +1. 
+  logdata <- dat
+  logdata[, metrange] <- apply(logdata[, metrange], MARGIN = 2, FUN = function(x) { 
+    log2(x + 1)
+  })
+  if (scaling == "auto"){ 
+    # Autoscaling of log transformed data. 
+    data.pretreated <- logdata
+    data.pretreated[, metrange] <- apply(data.pretreated[, metrange], MARGIN = 2, FUN = function(x) {
+      (x - mean(x)) / sd(x)
+    })
+  } else if (scaling == "pareto") {
+    # Paretoscaling of log transformed data (using the square root of the SD)
+    data.pretreated <- logdata
+    data.pretreated[, metrange] <- apply(data.pretreated[, metrange], MARGIN = 2, FUN = function(x) {
+      (x - mean(x)) / sqrt(sd(x))
+    })
+  } else { 
+    print("Please set scaling to auto or pareto")}
+  return(data.pretreated)
+}
 
 #### Function to calculate PCT levels from CLIA assays ----
 ## Function to calculate PCT values from plate reader (pr) results
@@ -206,103 +257,135 @@ PCTcalculator <- function(pr_results, pm_location){
   return(return_list)
 }
 
+#Add CRP and PCT to the data
+AddCRPAndPCT <- function(dat) {
+  # Load additional clinical patient data over time: temperature, CRP, leukocyte count, creatinine, information about antibiotic treatment 
+  infl.markers.longitudinal <- read.spss("data/raw/aanvullende data ilona 1762021.sav", 
+                                         use.value.labels = TRUE, to.data.frame = TRUE)
+  
+  # Make dataframe with CRP data over time
+  crp <- select(infl.markers.longitudinal, "Studienr", "CRP_0", "CRP_dg1", "CRP_dg2", "CRP_dg4", "CRP_30") 
+  names(crp) <- c("subject.id", "0", "1", "2", "4", "30")
+  crp_long <- pivot_longer(crp, names_to = "day", values_to = "crp", -"subject.id", names_transform = list(day = as.integer))
+  crp_long$subject.id <- as.character(crp_long$subject.id)
+  
+  # Make dataframe with PCT data over time
+  # Calculate PCT levels for all batches using function PCTcalculator
+  # Batch1
+  pr_results_B1 <- read.csv2("data/pct/CLIA_batch1_21-01-2022_gain3500.csv", skip = 8, sep = ":")
+  pm_location_B1 <- "data/pct/plate_design_batch1.xlsx"
+  pct_B1 <- PCTcalculator(pr_results_B1, pm_location_B1)
+  # Batch2
+  pr_results_B2 <- read.csv2("data/pct/CLIA_batch2_24-01-2022_gain3500.csv", skip = 8, sep = ":")
+  pm_location_B2 <- "data/pct/plate_design_batch2.xlsx"
+  pct_B2 <- PCTcalculator(pr_results_B2, pm_location_B2)
+  # Batch3
+  pr_results_B3 <- read.csv2("data/pct/CLIA_batch3_25-01-2022_gain3500.csv", skip = 8, sep = ":")
+  pm_location_B3 <- "data/pct/plate_design_batch3.xlsx"
+  pct_B3 <- PCTcalculator(pr_results_B3, pm_location_B3)
+  # Merge results from the three batches in one dataframe:
+  pct_df <- bind_rows(pct_B1[[2]], pct_B2[[2]], pct_B3[[2]])
+  # MANUALLY adjust name of 1 sample because it is incomplete
+  pct_df$sample.id.S[103] <- "303, S341185, 17-09-2010"
+  # Add day information
+  dayinfo <- select(dat, sample.id.S, subject.id, day) %>% 
+    mutate(subject.id = as.character(subject.id))
+  pct_long <- left_join(pct_df, dayinfo, by = c("sample.id.S", "subject.id"))
+  
+  AB_switch <- infl.markers.longitudinal %>% 
+    mutate(subject.id = as.character(Studienr)) %>% select(subject.id, AB_switch) %>% 
+    mutate(AB_switch = revalue(AB_switch, c("ja" = "Yes", "nee" = "No")))
+  
+  ## Add CRP and PCT to reduced data frame
+  data.full <- dat %>% 
+    left_join(crp_long, by = c("subject.id", "day")) %>%
+    select(-CRP) %>% # remove incomplete CRP (day 0 only)
+    left_join(pct_long, by = c("subject.id", "day", "sample.id.S")) %>% 
+    left_join(AB_switch, by = "subject.id")
+  
+  return(data.full)
+}
 
 
 
+
+
+###NOT FINISHED!!#
+AddRatiosAndSums <- function(data.clean) {
+  attach(data.clean)
+  ## Assemble metabolite ratio data.cleanaset
+  ratios <- data.frame(sample.id = sample.id, pathogen = pathogen)
+  #Sums
+  ratios$BCAA_sum <- L.Isoleucine + L.Leucine + L.Valine
+  ratios$TCA_cycle_sum <- OA03_._Citric_acid + OA07_._Lactic_acid + 
+    OA08_._Malic_acid + OA12_._Fumaric_acid
+  ratios$urea_cycle_sum <- Citrulline + L.Arginine + 
+    Ornithine + OA12_._Fumaric_acid
+  ratios$lc_Carnitines_sum <- Myristoilcarnitine + Hexadecenoylcarntine + 
+    Palmitoylcarnitine + Stearoylcarnitine + 
+    Dodecenoylcarnitine + Tetradecenoylcarnitine + 
+    Linoleylcarnitine + Oleylcarnitine + 
+    Tetradecadienylcarntine
+  ratios$mc_Carnitines_sum <- Hexanoylcarnitine + Octanoylcarnitine + 
+    Octenoylcarnitine + Decanoylcarnitine + 
+    Lauroylcarnitine + Nonaylcarnitine + 
+    Pimeylcarnitine + Decenoylcarnitine
+  ratios$sc_Carnitines_sum <- Acetylcarnitine + Propionylcarnitine + 
+    Isobutyrylcarnitine + Butyrylcarnitine + 
+    Tiglylcarnitine + X2.methylbutyroylcarnitine + 
+    Isovalerylcarnitine
+  ratios$Cer_sum <- Cer.d18.1.22.1. + Cer.d18.1.24.1. + 
+    Cer.d18.1.24.0. + Cer.d18.1.16.0. + 
+    Cer.d18.1.23.0. + Cer.d18.0.24.0.
+  ratios$SM_sum <- SM.d18.1.14.0. + SM.d18.1.15.0. +
+    SM.d18.1.16.1. + SM.d18.1.16.0. +
+    SM.d18.1.17.0. + SM.d18.1.18.2. +
+    SM.d18.1.18.1. + SM.d18.1.18.0. +
+    SM.d18.1.20.1. + SM.d18.1.20.0. +
+    SM.d18.1.21.0. + SM.d18.1.22.1. +
+    SM.d18.1.22.0. + SM.d18.1.23.1. +
+    SM.d18.1.23.0. + SM.d18.1.24.2. +
+    SM.d18.1.24.1. + SM.d18.1.24.0. +
+    SM.d18.1.25.1. + SM.d18.1.25.0.
+  ratios$LPC_sum <- LPC.14.0. + LPC.16.0. + LPC.16.1. + LPC.18.0. +
+    LPC.18.1. + LPC.18.2. + LPC.18.3. + LPC.20.4. + LPC.20.5. +
+    LPC.22.6. + LPC.O.16.1. + LPC.O.18.1.
+  ratios$PC_sum <- PC.32.2. + PC.32.1. + PC.32.0. + PC.O.34.3. +
+    PC.O.34.2. + PC.O.34.1. + PC.34.4. + PC.34.3. + 
+    PC.34.2. + PC.34.1. + PC.O.36.6. + PC.O.36.5. + 
+    PC.O.36.4. + PC.O.36.3. + PC.O.36.2. + PC.36.6. +
+    PC.36.5. + PC.36.4. + PC.36.3. + PC.36.2. +
+    PC.36.1. + PC.O.38.7. + PC.O.38.6. + PC.O.38.5. +
+    PC.O.38.4. + PC.38.7. + PC.38.6. + PC.38.5. +
+    PC.38.4. + PC.38.3. + PC.38.2. + PC.O.40.6. +
+    PC.40.8. + PC.40.7. + PC.40.6. + PC.40.4. +
+    PC.O.42.6. + PC.O.44.5. + PC.40.5.
+  
+  #Ratio's
+  ratios$HT5_Trp_ratio <- Serotonine / L.Tryptophan # Check if this one is correct
+  ratios$ADMA_Arg_ratio <- ADMA / L.Arginine
+  ratios$SDMA_Arg_ratio <- SDMA / L.Arginine
+  ratios$Carnitine_sum_lc_Carnitines_ratio <- Carnitine / ratios$lc_Carnitines_sum 
+  ratios$Carnitine_sum_mc_Carnitines_ratio <- Carnitine / ratios$mc_Carnitines_sum 
+  ratios$Carnitine_sum_sc_Carnitines_ratio <- Carnitine / ratios$sc_Carnitines_sum 
+  ratios$DCA_CA_ratio <- DCA / CA
+  ratios$FA_14.1_14.0 <- FA..14.1. / FA..14.0.
+  ratios$FA_16.1_16.0 <- FA..16.1. / FA..16.0.
+  ratios$Gln_Glu <- L.Glutamine / L.Glutamic.acid
+  ratios$Kyn_Trp <- L.Kynurenine / L.Tryptophan
+  ratios$sum_BCAA_sum_Phe_Tyr_ratio <-  ratios$BCAA_sum / (L.Phenylalanine + 
+                                                             L.Tyrosine)
+  ratios$sum_CER_sum_SM_ratio <- ratios$Cer_sum / ratios$SM_sum
+  ratios$sum_LPC_sum_PC_ratio <- ratios$LPC_sum / ratios$PC_sum
+    
+  detach(data.clean)
+  
+  data.ratios <- data.clean %>% left_join(ratios, by = c("sample.id", "pathogen"))
+  
+  return(data.ratios)
+  
+}
 
 #### 
-#### Custom color palette function ----
-# Create vector with 8 Leiden university / LACDR colors
-lei_colors <- c(
-  `blue`       = "#001158",
-  `orange`     = "#FF9933", 
-  `red`        = "#be1908",
-  `lightgreen` = "#aaad00",
-  `brightgreen`= "#06bd09",
-  `darkgreen`  = "#2c712d",
-  `turquoise`  = "#34a3a9",
-  `lightblue`  = "#5cb1eb",
-  `brightblue` = "#0536fa",
-  `violet`     = "#b02079" )
-
-## Function to extract the hex codes from this vector by name
-#' Function to extract lei colors as hex codes
-#' @param ... Character names of lei_colors 
-lei_cols <- function (...){
-  cols <- c(...)
-  
-  if (is.null(cols))
-    return (lei_colors)
-  
-  lei_colors[cols]
-}
-
-lei_palettes <- list(
-  `main`  = lei_cols("blue", "orange"),
-  `three` = lei_cols("blue", "orange", "darkgreen"),
-  `cool`  = lei_cols("blue", "lightblue", "turquoise", "lightgreen", "darkgreen"),
-  `hot`   = lei_cols("violet", "red", "orange"),
-  `mixed` = lei_cols("blue", "lightblue", "turquoise", "darkgreen", "lightgreen", "orange", "red", "violet"),
-  `two`   = lei_cols("red", "violet"), 
-  `five`  = lei_cols("blue", "lightblue", "orange", "red", "darkgreen"),
-  `nine`  = lei_cols("lightblue", "violet", "brightgreen",  "brightblue", "red", "lightgreen", "blue", "orange", "darkgreen"))
-
-#' Return function to interpolate a lei color palette
-#' @param palette Character name of palette in lei_palettes
-#' @param reverse Boolean indicating whether the palette should be reversed
-#' @param ... Additional arguments to pass to colorRampPalette(), such as an alpha value
-lei_pal <- function(palette = "main", reverse = FALSE, ...) {
-  pal <- lei_palettes[[palette]]
-  
-  if (reverse) pal <- rev(pal)
-  
-  colorRampPalette(pal, ...)
-}
-
-# Now return a function for any palette, for example `cool`:
-lei_pal("cool")
-# The returned function will interpolate the palette colors for a certain number of levels, making it possible to create shades between our original colors. To demonstrate, we can interpolate the "cool" palette to a length of 10:
-lei_pal("cool")(10)
-# This is what we need to create custom ggplot2 scales
-
-## Create custom color and fill scales for ggplot2 by creating one function for color and one for fill. 
-#' Color scale constructor for lei colors
-#' @param palette Character name of palette in lei_palettes
-#' @param discrete Boolean indicating whether color aesthetic is discrete or not
-#' @param reverse Boolean indicating whether the palette should be reversed
-#' @param ... Additional arguments passed to discrete_scale() or
-#'            scale_color_gradientn(), used respectively when discrete is TRUE or FALSE
-#'
-scale_color_lei <- function(palette = "main", discrete = TRUE, reverse = FALSE, ...) {
-  pal <- lei_pal(palette = palette, reverse = reverse)
-  
-  if (discrete) {
-    discrete_scale("colour", paste0("lei_", palette), palette = pal, ...)
-  } else {
-    scale_color_gradientn(colours = pal(256), ...)
-  }
-}
-
-#' Fill scale constructor for lei colors
-#'
-#' @param palette Character name of palette in lei_palettes
-#' @param discrete Boolean indicating whether color aesthetic is discrete or not
-#' @param reverse Boolean indicating whether the palette should be reversed
-#' @param ... Additional arguments passed to discrete_scale() or
-#'            scale_fill_gradientn(), used respectively when discrete is TRUE or FALSE
-#'
-scale_fill_lei <- function(palette = "main", discrete = TRUE, reverse = FALSE, ...) {
-  pal <- lei_pal(palette = palette, reverse = reverse)
-  
-  if (discrete) {
-    discrete_scale("fill", paste0("lei_", palette), palette = pal, ...)
-  } else {
-    scale_fill_gradientn(colours = pal(256), ...)
-  }
-}
-
-
-
-
 
 #### 

@@ -1,14 +1,19 @@
 #start with dat from 01_DataAnalysis
 library(tidyverse)
 
+# use data.pretreated from 01_DataAnalysis
+metrange <- attr(data.pretreated, "metrange")
 spline_data <- as.data.frame(matrix(ncol = 5, nrow = length(metrange)))
 rownames(spline_data) <- metrange
 
 for (met in metrange) {
+  dat <- data.pretreated[, c(met, "day")] %>% 
+    filter(!is.na(!!as.name(met)))
   spline_met <- smooth.spline(x = dat$day, y = dat[, met])
   spline_data[met, ] <- spline_met$y
 }
 
+set.seed(73485183)
 k <- 5
 kmeans_result <- kmeans(spline_data[, 1:5], k)
 
@@ -21,19 +26,26 @@ long_cluster <- spline_data %>%
   pivot_longer(-c(metabolite, cluster), names_to = "day", values_to = "spline") %>% 
   mutate(day = as.numeric(day))
 
+
+colnames(kmeans_result$centers)[1:5] <- sort(unique(dat$day))
 centroids <- as.data.frame(kmeans_result$centers) %>% 
   rownames_to_column("cluster") %>% 
   pivot_longer(-cluster, names_to = "day", values_to = "centroid") %>% 
   mutate(day = as.numeric(day))
 
-long_cluster %>% 
+cluster_plot <- long_cluster %>% 
   ggplot(aes(x = day, color = as.factor(cluster))) +
   geom_point(aes(y = spline)) +
   geom_line(aes(group = metabolite, y = spline), alpha = 0.1) +
   geom_line(data = centroids, aes(y = centroid), size = 2) +
   
-  #geom_smooth(aes(group = as.factor(cluster)), se = F) +
+  #geom_smooth(aes(group = as.factor(cluster), y = centroid), se = F) +
   theme_bw()
+
+pdf("results/figures/cluster_plot_splines_metabolites.pdf", width = 6, height = 4)
+print(cluster_plot)
+dev.off()
+
 
 
 #check number of metabolites per cluster

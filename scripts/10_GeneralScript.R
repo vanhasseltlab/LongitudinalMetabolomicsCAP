@@ -18,59 +18,20 @@ source("functions/AllFunctions.R")
 ## Input data -----------------------------------------------------------------
 # Load metabolomics data after quality control
 dat.raw <- read.csv2("data/00_data_raw.csv")
-# Remove redundent variables from dataframe
+# Remove redundant variables from data frame
 data.reduced <- ReduceData(dat.raw)
+#Filter metabolite data
+data.clean <- DataCleaning(data.reduced, attr(data.reduced, "metrange"))
+#Log transform and scale metabolite data
+data.pretreated <- DataPretreatment(data.clean, metrange = attr(data.clean, "metrange"), scaling = "auto")
 
-# Load additional clinical patient data over time: temperature, CRP, leukocyte count, creatinine, information about antibiotic treatment 
-infl.markers.longitudinal <- read.spss("data/raw/aanvullende data ilona 1762021.sav", 
-                                  use.value.labels = TRUE, to.data.frame = TRUE)
+#Add longitudinal markers: CRP and PCT
+data.full <- AddCRPAndPCT(data.reduced)
+data.full.pretreated <- AddCRPAndPCT(data.pretreated)
 
-# Make dataframe with CRP data over time
-crp <- select(infl.markers.longitudinal, "Studienr", "CRP_0", "CRP_dg1", "CRP_dg2", "CRP_dg4", "CRP_30") 
-names(crp) <- c("subject.id", "0", "1", "2", "4", "30")
-crp_long <- pivot_longer(crp, names_to = "day", values_to = "crp", -"subject.id")
-crp_long$subject.id <- as.factor(crp_long$subject.id)
+#Add ratios and sums to data.clean
+data.full.clean <- AddRatiosAndSums(data.clean)
 
-# Make dataframe with PCT data over time
-# Calculate PCT levels for all batches using function PCTcalculator
-# Batch1
-pr_results_B1 <- read.csv2("data/pct/CLIA_batch1_21-01-2022_gain3500.csv", skip = 8, sep = ":")
-pm_location_B1 <- "data/pct/plate_design_batch1.xlsx"
-pct_B1 <- PCTcalculator(pr_results_B1, pm_location_B1)
-# Batch2
-pr_results_B2 <- read.csv2("data/pct/CLIA_batch2_24-01-2022_gain3500.csv", skip = 8, sep = ":")
-pm_location_B2 <- "data/pct/plate_design_batch2.xlsx"
-pct_B2 <- PCTcalculator(pr_results_B2, pm_location_B2)
-# Batch3
-pr_results_B3 <- read.csv2("data/pct/CLIA_batch3_25-01-2022_gain3500.csv", skip = 8, sep = ":")
-pm_location_B3 <- "data/pct/plate_design_batch3.xlsx"
-pct_B3 <- PCTcalculator(pr_results_B3, pm_location_B3)
-# Merge results from the three batches in one dataframe:
-pct_df <- bind_rows(pct_B1[[2]], pct_B2[[2]], pct_B3[[2]])
-# MANUALLY adjust name of 1 sample because it is incomplete
-pct_df$sample.id.S[103] <- "303, S341185, 17-09-2010"
-# Add day information
-dayinfo <- select(data.reduced, sample.id.S, subject.id, day)
-pct_long <- left_join(pct_df, dayinfo, by = c("sample.id.S", "subject.id"))
-
-## Add CRP and PCT to reduced data frame
-data.reduced <- data.reduced %>% 
-  left_join(crp_long, by = c("subject.id", "day")) %>%
-  select(-CRP) %>% # remove incomplete CRP (day 0 only)
-  left_join(pct_long, by = c("subject.id", "day", "sample.id.S"))
-              
-
-## Calculate CURB score at day 0 for all patients (subject.id's) and add to reduced data
-data.reduced <- data.reduced %>% 
-  mutate(data.reduced, curb = 0)
-for (i in 1:nrow(data.reduced)) {
-  curbscore <- 0
-  if (as.character(data.reduced$altered.mental.status[i]) == "Yes") {curbscore = curbscore + 1}
-  if (as.numeric(as.character(data.reduced$BUN[i])) > 7){curbscore = curbscore + 1}
-  if (as.numeric(as.character(data.reduced$respiratory.rate[i])) >= 30){curbscore = curbscore + 1}
-  if (as.numeric(as.character(data.reduced$systolic.blood.pressure[i])) < 90){curbscore = curbscore + 1}
-  data.reduced$curb[i] <- curbscore
-}
 
 ## Load metabolite class data
 
@@ -78,21 +39,15 @@ for (i in 1:nrow(data.reduced)) {
 ## Define variables ----
 
 # Define metabolite and metadata range in data after quality control
-nonmetrange <- c("sample.id", "sample.id.S", "subject.id", "day", "pathogen", "pathogen.group", "age", "sex", "psi.score", "nursing.home.resident",
-                 "renal.disease", "liver.disease", "congestive.heart.failure", "cns.disease", "malignancy", "altered.mental.status",
-                 "respiratory.rate", "systolic.blood.pressure", "temperature", "pulse", "pH" , "BUN" , "sodium", "glucose", 
-                 "hematocrit", "partial.pressure.of.oxygen", "pleural.effusion.on.x.ray", "race", "duration.of.symptoms.before.admission",
-                 "antibiotic.treatment.before.admission", "corticosteroid.use.before.admission", "COPD", "diabetes", 
-                 "oxygen.saturation", "supplemental.oxygen.required", "antibiotics.started.in.hospital", "leukocyte.count", 
-                 "IL.6", "IL.10", "crp", "pct", "pct_string", "curb")
-metrange <- setdiff(names(data.reduced), nonmetrange)
+metrange <- attr(data.full, "metrange")
+nonmetrange <- setdiff(names(data.full), metrange)
 
 ## Correlations ----
 
 ## Change in metabolite level (d0-d30) related to disease severity:
 # Change in metabolite levels (d0-d30) vs CURB score (d0)
 # Calulate change metabolite levels (d30-d0)
-dat_met_d30_d0 <- data.reduced[, c("subject.id", "day", metrange)] %>% 
+dat_met_d30_d0 <- data.full[, c("subject.id", "day", metrange)] %>% 
   filter(day %in% c(0, 30)) %>% 
   pivot_longer(-c(subject.id, day), names_to = "metabolite") %>% 
   pivot_wider(id_cols = c(subject.id, metabolite), names_from = day) %>% 
@@ -100,7 +55,7 @@ dat_met_d30_d0 <- data.reduced[, c("subject.id", "day", metrange)] %>%
   pivot_wider(names_from = metabolite, values_from = met_d30_d0, id_cols = c(subject.id))
 
 # Select 2nd variable for correlation calculation
-dat_curb <- select(data.reduced, "subject.id", "day", "curb") %>% 
+dat_curb <- select(data.full, "subject.id", "day", "curb") %>% 
   filter(day == 0) %>% 
   select(-day)
 
@@ -186,7 +141,7 @@ lines(x, dnorm(x, 0, sd(cor_mat[, 1])), col = "red")
 
 ## Change in metabolite levels (d0, 1, 2, 4, 30) vs CRP change (d0, 1, 2, 4, 30)
 # Select columns of interest
-dat_met_crp <- data.reduced[, c("subject.id", "day", "crp", metrange)]
+dat_met_crp <- data.full[, c("subject.id", "day", "crp", metrange)]
 # Make correlation matrix:
 cor_mat <- cor(dat_met_crp[, metrange], as.numeric(dat_met_crp$crp), use = "pairwise.complete.obs", method = "pearson")
 # Add correlations to general dataframe
@@ -221,7 +176,7 @@ lines(x, dnorm(x, 0, sd(cor_mat[, 1])), col = "red")
 
 ## Change in metabolite levels (d0, 1, 2, 4, 30) vs PCT change (d0, 1, 2, 4, 30)
 # Select columns of interest
-dat_met_pct <- data.reduced[, c("subject.id", "day", "pct", metrange)]
+dat_met_pct <- data.full[, c("subject.id", "day", "pct", metrange)]
 # Make correlation matrix:
 cor_mat <- cor(dat_met_pct[, metrange], as.numeric(dat_met_pct$pct), use = "pairwise.complete.obs", method = "pearson")
 # Add correlations to general dataframe
@@ -256,7 +211,7 @@ lines(x, dnorm(x, 0, sd(cor_mat[, 1])), col = "red")
 
 ## PCT (d0, 1, 2, 4, 30) vs CRP (d0, 1, 2, 4, 30)
 # Select columns of interest
-dat_crp_pct <- data.reduced[, c("subject.id", "day", "pct", "crp")]
+dat_crp_pct <- data.full[, c("subject.id", "day", "pct", "crp")]
 # Make correlation matrix:
 cor_mat <- cor(as.numeric(dat_crp_pct$crp), as.numeric(dat_crp_pct$pct), use = "pairwise.complete.obs", method = "pearson")
 # Correlation is 0.6 -> CRP and PCT are correlated
@@ -264,7 +219,7 @@ cor_mat <- cor(as.numeric(dat_crp_pct$crp), as.numeric(dat_crp_pct$pct), use = "
 
 ## CRP (d0) vs CURB (d0)
 # Select columns of interest
-dat_crp_curb <- select(data.reduced, subject.id, day, crp, curb) %>% 
+dat_crp_curb <- select(data.full, subject.id, day, crp, curb) %>% 
   filter(day == 0)
 # Make correlation matrix:
 cor_mat <- cor(as.numeric(dat_crp_curb$crp), as.numeric(dat_crp_curb$curb), use = "pairwise.complete.obs", method = "kendall")
@@ -273,7 +228,7 @@ cor_mat <- cor(as.numeric(dat_crp_curb$crp), as.numeric(dat_crp_curb$curb), use 
 
 ## PCT (d0) vs CURB (d0)
 # Select columns of interest
-dat_pct_curb <- select(data.reduced, subject.id, day, pct, curb) %>% 
+dat_pct_curb <- select(data.full, subject.id, day, pct, curb) %>% 
   filter(day == 0)
 # Make correlation matrix:
 cor_mat <- cor(as.numeric(dat_pct_curb$pct), as.numeric(dat_pct_curb$curb), use = "pairwise.complete.obs", method = "kendall")
@@ -318,6 +273,28 @@ corposterplot <- ggplot(data = heatmap_dat_3, aes(y = metabolite, x = marker)) +
   theme(text=element_text(size=20))
   
 ggsave(corposterplot, file="results/figures/heatmap_PCT_CRP_met_over_time.png", width=6, height=8, dpi=300)
+
+corr_all_wide <- pivot_wider(corr_all, names_from = marker, values_from = correlation)
+#Combine with spline data
+spline_data_2 <- spline_data %>% 
+  rownames_to_column("metabolite") %>% 
+  select(metabolite, cluster)
+corr_all_wide <- left_join(corr_all_wide, spline_data_2, by = "metabolite")
+
+metabolite_names <- read_excel("data/Metabolite_names_V2.xlsx") %>% 
+  as.data.frame(metabolite_names) %>% 
+  filter(Detected_metabolite_name_in_R %in% corr_all_wide$metabolite) %>% 
+  select(Detected_metabolite_name_in_R, Metabolite_name_V2)
+colnames(metabolite_names) <- c("metabolite", "metabolite_name")
+
+corr_all_wide <- corr_all_wide %>% 
+  left_join(metabolite_names, by = "metabolite") %>% 
+  select(-metabolite)
+write.csv(corr_all_wide, "results/corr_all_wide.csv")
+  
+#Biological interpretation or CURB, CRP/PCT and splines
+decreasing_trend <- corr_all_wide %>% 
+  filter(cluster == 5)
 
 ## Data cleaning --------------------------------------------------------------
 # data.clean <- DataCleaning(data.reduced, metrange, nonmetrange)

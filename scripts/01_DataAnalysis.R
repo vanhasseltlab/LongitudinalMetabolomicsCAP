@@ -64,9 +64,9 @@ psi.score.components <- c("nursing.home.resident",                "renal.disease
 save(nonmetrange, metrange, infection_markers, psi.score.components, file = "data/column_names.Rdata")
 
 ## Data cleaning --------------------------------------------------------------
-data.clean <- DataCleaning(data.reduced, metrange, nonmetrange)
+data.clean <- DataCleaning(data.reduced, attr(data.reduced, "metrange"))
 #Reset metrange after cleaning
-metrange <- setdiff(names(data.clean), nonmetrange)
+metrange <- attr(data.clean, "metrange")
 
 ## Data pretreatment ----------------------------------------------------------
 # Log2 transformation of metabolite values +1. 
