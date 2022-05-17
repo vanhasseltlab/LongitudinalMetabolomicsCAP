@@ -257,7 +257,7 @@ PCTcalculator <- function(pr_results, pm_location){
   return(return_list)
 }
 
-#Add CRP and PCT to the data
+#Add CRP, PCT and creatinine to the data
 AddCRPAndPCT <- function(dat) {
   # Load additional clinical patient data over time: temperature, CRP, leukocyte count, creatinine, information about antibiotic treatment 
   infl.markers.longitudinal <- read.spss("data/raw/aanvullende data ilona 1762021.sav", 
@@ -268,6 +268,12 @@ AddCRPAndPCT <- function(dat) {
   names(crp) <- c("subject.id", "0", "1", "2", "4", "30")
   crp_long <- pivot_longer(crp, names_to = "day", values_to = "crp", -"subject.id", names_transform = list(day = as.integer))
   crp_long$subject.id <- as.character(crp_long$subject.id)
+  
+  # Make dataframe with creatinine data over time
+  crea <- select(infl.markers.longitudinal, "Studienr", "kreat_dag0", "Kreat_1", "Kreat_2", "Kreat_4", "Kreat_30") 
+  names(crea) <- c("subject.id", "0", "1", "2", "4", "30")
+  crea_long <- pivot_longer(crea, names_to = "day", values_to = "crea", -"subject.id", names_transform = list(day = as.integer))
+  crea_long$subject.id <- as.character(crea_long$subject.id)
   
   # Make dataframe with PCT data over time
   # Calculate PCT levels for all batches using function PCTcalculator
@@ -301,16 +307,14 @@ AddCRPAndPCT <- function(dat) {
     left_join(crp_long, by = c("subject.id", "day")) %>%
     select(-CRP) %>% # remove incomplete CRP (day 0 only)
     left_join(pct_long, by = c("subject.id", "day", "sample.id.S")) %>% 
-    left_join(AB_switch, by = "subject.id")
+    left_join(AB_switch, by = "subject.id") %>% 
+    left_join(crea_long, by =  c("subject.id", "day"))
   
   return(data.full)
 }
 
 
-
-
-
-###NOT FINISHED!!#
+#calculates different sums and ratios
 AddRatiosAndSums <- function(data.clean) {
   attach(data.clean)
   ## Assemble metabolite ratio data.cleanaset
@@ -382,10 +386,9 @@ AddRatiosAndSums <- function(data.clean) {
   
   data.ratios <- data.clean %>% left_join(ratios, by = c("sample.id", "pathogen"))
   
+  attr(data.ratios, "ratiorange") <- setdiff(colnames(ratios), c("sample.id", "pathogen"))
+  
   return(data.ratios)
   
 }
 
-#### 
-
-#### 

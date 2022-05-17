@@ -20,17 +20,17 @@ source("functions/AllFunctions.R")
 dat.raw <- read.csv2("data/00_data_raw.csv")
 # Remove redundant variables from data frame
 data.reduced <- ReduceData(dat.raw)
-#Filter metabolite data
+#Remove metabolites with to many NAs
 data.clean <- DataCleaning(data.reduced, attr(data.reduced, "metrange"))
-#Log transform and scale metabolite data
-data.pretreated <- DataPretreatment(data.clean, metrange = attr(data.clean, "metrange"), scaling = "auto")
 
 #Add longitudinal markers: CRP and PCT
 data.full <- AddCRPAndPCT(data.reduced)
-data.full.pretreated <- AddCRPAndPCT(data.pretreated)
 
-#Add ratios and sums to data.clean
-data.full.clean <- AddRatiosAndSums(data.clean)
+#Add ratios and sums to data.full
+data.full.clean <- AddRatiosAndSums(AddCRPAndPCT(data.clean))
+
+#Log transform and scale metabolite data
+data.full.scaled <- DataPretreatment(data.full.clean, metrange = attr(data.clean, "metrange"), scaling = "auto")
 
 
 ## Load metabolite class data
@@ -60,13 +60,7 @@ dat_curb <- select(data.full, "subject.id", "day", "curb") %>%
   select(-day)
 
 # Combine variables of interst to dataframe for correlation calculation
-cor_dat <- left_join(dat_curb, dat_met_d30_d0, by = c("subject.id")) #%>%
-  # pivot_longer(names_to = "metabolite", -c(subject.id, curb)) %>%
-  # left_join(metabolite_names, by = "metabolite", copy = TRUE) %>%
-  # select(-metabolite) %>%
-  # rename("metabolite" = "metabolite_name") %>%
-  # filter(metabolite != "S-3-Hydroxyisobutyric acid") %>%
-  # pivot_wider(names_from = "metabolite")
+cor_dat <- left_join(dat_curb, dat_met_d30_d0, by = c("subject.id"))
 
 # Make correlation matrix:
 cor_mat <- cor(cor_dat[, metrange], as.numeric(cor_dat$curb), use = "pairwise.complete.obs", method = "kendall") # method kendall for ordinal variable CURB
@@ -87,17 +81,6 @@ lowest_cor <- c(as.data.frame(cor_mat) %>% filter(V1 < -0.55) %>%
                   rownames_to_column('metabolite') %>% 
                   arrange(V1) %>% select(metabolite) %>% unlist())
 
-# lowest_cor <- c(as.data.frame(cor_mat) %>% 
-#                   filter(V1 < -0.55) %>% 
-#                   rownames_to_column('metabolite') %>% 
-#                   left_join(metabolite_names, by = "metabolite") %>% 
-#                   select(-metabolite) %>% 
-#                   rename("metabolite" = "metabolite_name") %>% 
-#                   filter(metabolite != "S-3-Hydroxyisobutyric acid") %>%
-#                   arrange(V1) %>% 
-#                   select(metabolite) %>% 
-#                   unlist())
-
 # Plot correlations:
 facet_names <- paste0(rownames(cor_mat), " (tau = ", round(cor_mat[, 1], 3), ")")
 names(facet_names) <- rownames(cor_mat)
@@ -106,8 +89,7 @@ plotdat <- cor_dat %>%
   pivot_longer(-c(subject.id, curb), names_to = "metabolite") %>%
   filter(metabolite %in% lowest_cor) %>% 
   filter(!is.na(value)) %>%  
-  mutate(metabolite = factor(metabolite, levels = lowest_cor)) #%>% 
-  # mutate(facets = facet_names )
+  mutate(metabolite = factor(metabolite, levels = lowest_cor))
 
 posterplot <- ggplot(data = plotdat, aes(x = curb, y = value, group = metabolite)) +
   geom_abline(aes(intercept = 0, slope = 0),  linetype="dotted")+
@@ -118,7 +100,6 @@ posterplot <- ggplot(data = plotdat, aes(x = curb, y = value, group = metabolite
   theme_bw() +
   theme(text=element_text(size=28))
 
-# ggsave(file="results/figures/CURB_met_d30-d0_t0.55_boxplot.svg", plot=posterplot, width=10, height=8)
 ggsave(posterplot, file="results/figures/CURB_met_d30-d0_t0.55_boxplot.png", width=12, height=7, dpi=300)
 
 pdf("results/figures/CURB_met_d0-d30_t0.55_boxplot.pdf", width = 10)
@@ -133,14 +114,11 @@ print(cor_dat %>%
         facet_wrap(~ metabolite, scales = "free_y", labeller = labeller(metabolite = facet_names), ncol = 5) +
         theme_bw())
 dev.off()
-#Histogram of distribution
-hist(cor_mat[, 1], freq = FALSE, breaks = 30)
-x <- seq(-1, 1, by = 0.05)
-lines(x, dnorm(x, 0, sd(cor_mat[, 1])), col = "red")
 
 
 ## Change in metabolite levels (d0, 1, 2, 4, 30) vs CRP change (d0, 1, 2, 4, 30)
 # Select columns of interest
+metrange <- attr(data.full, "metrange")
 dat_met_crp <- data.full[, c("subject.id", "day", "crp", metrange)]
 # Make correlation matrix:
 cor_mat <- cor(dat_met_crp[, metrange], as.numeric(dat_met_crp$crp), use = "pairwise.complete.obs", method = "pearson")
@@ -168,10 +146,6 @@ print(dat_met_crp %>%
         facet_wrap(~ metabolite, scales = "free_y", labeller = labeller(metabolite = facet_names)) +
         theme_bw())
 dev.off()
-#Histogram of distribution
-hist(cor_mat[, 1], freq = FALSE, breaks = 30)
-x <- seq(-1, 1, by = 0.05)
-lines(x, dnorm(x, 0, sd(cor_mat[, 1])), col = "red")
 
 
 ## Change in metabolite levels (d0, 1, 2, 4, 30) vs PCT change (d0, 1, 2, 4, 30)
@@ -203,10 +177,6 @@ print(dat_met_pct %>%
         facet_wrap(~ metabolite, scales = "free_y", labeller = labeller(metabolite = facet_names)) +
         theme_bw())
 dev.off()
-#Histogram of distribution
-hist(cor_mat[, 1], freq = FALSE, breaks = 30)
-x <- seq(-1, 1, by = 0.05)
-lines(x, dnorm(x, 0, sd(cor_mat[, 1])), col = "red")
 
 
 ## PCT (d0, 1, 2, 4, 30) vs CRP (d0, 1, 2, 4, 30)
@@ -256,7 +226,7 @@ heatmap_dat_3 <- pivot_wider(heatmap_dat_2, names_from  = marker, values_from = 
   select(-metabolite) %>% 
   filter(metabolite_name != "S-3-Hydroxyisobutyric acid") %>%
   pivot_longer(names_to = "marker", values_to = "correlation", -metabolite_name) %>%
-  rename("metabolite" = "metabolite_name")
+  dplyr::rename("metabolite" = "metabolite_name")
 
 m <- as.matrix(pivot_wider(heatmap_dat_3, names_from = metabolite, values_from = correlation)[, -1])
 clust <- hclust(dist(t(m)))
@@ -295,30 +265,4 @@ write.csv(corr_all_wide, "results/corr_all_wide.csv")
 #Biological interpretation or CURB, CRP/PCT and splines
 decreasing_trend <- corr_all_wide %>% 
   filter(cluster == 5)
-
-## Data cleaning --------------------------------------------------------------
-# data.clean <- DataCleaning(data.reduced, metrange, nonmetrange)
-# #Reset metrange after cleaning
-# metrange <- setdiff(names(data.clean), nonmetrange)
-data.clean <- data.reduced
-
-## Data pretreatment ----------------------------------------------------------
-# Log2 transformation of metabolite values +1. 
-logdata <- data.clean
-logdata[, metrange] <- apply(logdata[, metrange], MARGIN = 2, FUN = function(x) { 
-  log2(x + 1)
-})
-
-# Autoscaling of log transformed data. 
-data.pretreated <- logdata
-data.pretreated[, metrange] <- apply(data.pretreated[, metrange], MARGIN = 2, FUN = function(x) {
-  (x - mean(x)) / sd(x)
-})
-
-## Data summary --------------------------------------------------------------
-dat <- data.pretreated
-
-## Data imputation -----------------------------------------------------------
-
-
 

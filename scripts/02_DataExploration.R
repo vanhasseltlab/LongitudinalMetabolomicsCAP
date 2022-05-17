@@ -1,13 +1,18 @@
-#Exploratory analysis
+#Exploratory analysis - Visualize all metabolites over time
 
 # Load libraries
 library(tidyverse)
 
-#Metabolites
-data.reduced <- read.csv2("data/00_data_reduced.csv")
+# Source functions
+source("functions/AllFunctions.R")
+
+#Data preparation
+dat.raw <- read.csv2("data/00_data_raw.csv")
+# Remove redundant variables from data frame
+data.reduced <- ReduceData(dat.raw)
 
 #metabolites range
-load("data/column_names.Rdata")
+metrange <- attr(data.reduced, "metrange")
 
 # Plot all metabolites
 # of interest: subject.id, day
@@ -16,7 +21,6 @@ metabolite.data <- data.reduced[, c("subject.id", "day", metrange)]
 metabolite.plot.df <- metabolite.data %>% 
   pivot_longer(-c(subject.id, day), names_to = "metabolite", values_to = "concentration") %>% 
   filter(!is.na(concentration))
-
 
 squish_trans <- function(from, to, factor) {
   trans <- function(x) {
@@ -43,7 +47,6 @@ squish_trans <- function(from, to, factor) {
   return(scales::trans_new("squished", trans, inv))
 }
 
-
 ticks <- 0:30
 showing <- c(0:4,  30)
 ticks[!ticks %in% showing] <- ""
@@ -66,7 +69,7 @@ for (i in 1:nr.of.pages) {
     facet_wrap(~ metabolite, scale = "free_y") +
     theme_bw() +
     theme(panel.grid.minor.x = element_blank())
-} 
+}
 
 
 pdf(file = "results/figures/metabolomics_over_time.pdf", width = 11, height = 11)

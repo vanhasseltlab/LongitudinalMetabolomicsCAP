@@ -5,15 +5,14 @@ library(tidyverse)
 library(lme4)
 # Source functions
 source("functions/AllFunctions.R")
-source("functions/DataCleaning.R")
 
 #Data
 # Load metabolomics data after quality control
 dat.raw <- read.csv2("data/00_data_raw.csv")
 # Remove redundant variables from data frame
 data.reduced <- ReduceData(dat.raw)
-#Add longitudinal markers: CRP and PCT
-data.full <- AddCRPAndPCT(data.reduced)
+#Add longitudinal markers: CRP and PCT and ratios and sums
+data.full <- AddRatiosAndSums(AddCRPAndPCT(data.reduced))
 
 #Covariates of interest:
 #age, sex, antibiotica bij start, antibiotica switch, CURB, CRP, PCT, 
@@ -24,7 +23,7 @@ data.full <- AddCRPAndPCT(data.reduced)
 vars_of_interest <- c("age", "sex", "curb", "hospitalization.time", "crp", "pct")
 
 #Define metrange
-metrange <- attr(data.full, "metrange")
+metrange <- c(attr(data.full, "metrange"), attr(data.full, "ratiorange"))
 
 #Fit a linear mixed effect model to the data for each metabolite, store estimates and t values
 results_lmm <- NULL
@@ -59,3 +58,42 @@ for (i in 1:length(metrange)) {
   l_model <- lm(data = dat_lm, as.formula(paste(metrange[i], "~", paste(vars_of_interest, collapse = " + "))))
   results_lm <- rbind.data.frame(results_lm, data.frame(metabolite = metrange[i], summary(l_model)$coefficients[-1, ]) %>% rownames_to_column("covariate"))
 }
+
+
+
+
+#get top 10s out
+results_lm %>%
+  filter(covariate == "crp") %>% 
+  dplyr::arrange(desc(abs(t.value))) %>% slice_head(n = 10)
+
+
+
+#hospitalization time analysis
+
+#linear model with day1-0, day2-0, day4-0, day30-0
+results_lm_hosp <- NULL
+vars_hosp <- c("age", "sex", paste0("day", c(1, 2, 4, 30), "_0"))
+for (i in 1:length(metrange)) {
+  dat_lm <- data.full %>% 
+    select(all_of(c(metrange[i], "age", "sex", "day", "subject.id", "hospitalization.time"))) %>% 
+    #feature engineering
+    pivot_wider(names_from = day, values_from = all_of(metrange[i]), names_prefix = "day") %>% 
+    mutate(day1_0 = day1 - day0, day2_0 = day2 - day0, day4_0 = day4 - day0, day30_0 = day30 - day0)
+  
+  lm_model_hosp <- lm(data = dat_lm, as.formula(paste("hospitalization.time ~", paste(c("age", "sex", paste0("day", c(1, 2, 4, 30), "_0")), collapse = " + "))))
+  results_lm_hosp <- rbind.data.frame(results_lm_hosp, data.frame(metabolite = metrange[i], summary(lm_model_hosp)$coefficients[-1, ]) %>% rownames_to_column("covariate"))
+}
+
+
+save(results_lm, results_lmm, results_lm_hosp, file = "results/linear_model_results.Rdata")
+
+
+#load results from script:
+load("results/linear_model_results.Rdata")
+
+
+
+
+
+
