@@ -1,4 +1,8 @@
 ## This script contains all functions nessecary to reproduce the data from the Longitudinal Metabolomics project
+library(plyr)
+library(foreign)
+library(openxlsx)
+
 
 #### Remove redundant variables from raw data using reduction function ----
 ReduceData <- function(data.raw){

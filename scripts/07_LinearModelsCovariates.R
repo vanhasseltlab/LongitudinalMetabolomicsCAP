@@ -37,7 +37,6 @@ for (i in 1:length(metrange)) {
   results_lmm <- rbind.data.frame(results_lmm, data.frame(metabolite = metrange[i], summary(lm_model)$coefficients[-1, ]) %>% rownames_to_column("covariate"))
 }
 
-
 #Fit a linear model with day30-day0 for PCT, CRP and the metabolites
 #Transform longitudinal data to data with one variable per subject
 vars_static <- setdiff(vars_of_interest, c("crp", "pct"))
@@ -92,8 +91,29 @@ save(results_lm, results_lmm, results_lm_hosp, file = "results/linear_model_resu
 #load results from script:
 load("results/linear_model_results.Rdata")
 
+#ordinal regression model with day1-0, day2-0, day4-0, day30-0 on curb
+results_lm_curb <- NULL
+vars_curb <- c("age", "sex", paste0("day", c(1, 2, 4, 30), "_0"))
+for (i in 1:length(metrange)) {
+  dat_lm <- data.full %>% 
+    select(all_of(c(metrange[i], "age", "sex", "day", "subject.id", "curb"))) %>% 
+    #feature engineering
+    pivot_wider(names_from = day, values_from = all_of(metrange[i]), names_prefix = "day") %>% 
+    mutate(day1_0 = day1 - day0, day2_0 = day2 - day0, day4_0 = day4 - day0, day30_0 = day30 - day0) %>% 
+    mutate(curb = as.factor(curb), sex = as.factor(sex))
+  
+  lm_model_curb <- MASS::polr(data = dat_lm, as.formula(paste("curb ~", paste(c("age", paste0("day", c(1, 2, 4, 30), "_0")), collapse = " + "))))
+  results_lm_curb <- rbind.data.frame(results_lm_curb, data.frame(metabolite = metrange[i], summary(lm_model_hosp)$coefficients[-1, ]) %>% rownames_to_column("covariate"))
+}
 
 
+lm_model_curb$
+MASS::polr()
+test_om <- MASS::polr(data = dat_lm,  as.formula(paste("curb ~", paste(c("age", paste0("day", c(1, 2, 4, 30), "_0")), collapse = " + "))), Hess = TRUE)
+coef(summary(test_om))
+test_om$edf
+confint(profile(test_om))
+pairs(profile(test_om))
 
-
-
+11.6227210 + 2*qt(0.025, 1.1342271, 12)
+11.6227210 + 7.882866
