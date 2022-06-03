@@ -6,7 +6,6 @@
 # Rstudio version: 1.1.463
 
 # Load libraries
-library(plyr)
 library(foreign)
 library(ggplot2)
 library(openxlsx)

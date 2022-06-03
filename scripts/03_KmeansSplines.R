@@ -57,7 +57,7 @@ cluster_plot <- long_cluster %>%
   ggplot(aes(x = day, color = as.factor(cluster))) +
   geom_point(aes(y = spline)) +
   geom_line(aes(group = metabolite, y = spline), alpha = 0.1) +
-  geom_line(data = centroids, aes(y = centroid), size = 2) +
+  geom_line(data = centroids, aes(y = centroid), size = 1.5) +
   scale_color_lei(palette = "five") +
   theme_bw()
 
@@ -71,50 +71,31 @@ table(spline_data$cluster)
 #####
 
 ###### Metabolic classes and clusters ####
-# up to date metabolite names: read_excel("data/Metabolite_names_V2_incl_ratios.xlsx")
-metabolite_class_raw <- read_excel("data/Biochemical_classes_metabolites.xlsx")
-metabolite_names <- read_excel("data/Metabolite_names_V2_incl_ratios.xlsx")
+names_and_class <- read.csv("data/metabolite_names_and_classes.csv", stringsAsFactors = F)
 
-metabolite_clusters <- long_cluster %>% 
+metabolite_class <- long_cluster %>%
   select(metabolite, cluster) %>% 
-  distinct()
-
-metabolite_class <- metabolite_names %>% mutate(Metabolite_name = Metabolite_name_V2) %>% 
-  select(Metabolite_name, Detected_metabolite_name_in_R) %>% 
-  left_join(metabolite_class_raw) %>%
-  dplyr::rename(metabolite = Detected_metabolite_name_in_R) %>% 
-  right_join(metabolite_clusters) %>% 
-  mutate(Metabolite_class = ifelse(metabolite %in% attr(data.pretreated, "ratiorange"),
-                                   "Sums and ratios", Metabolite_class))
+  distinct()  %>%  left_join(names_and_class)
 
 #### Visualize metabolite classes per cluster #####
-table_classes <- sort(table(metabolite_class$Metabolite_class))
-small_classes <- names(table_classes[table_classes < 9])
+table_classes <- sort(table(metabolite_class$class))
+small_classes <- names(table_classes[table_classes < 3])
 
-cluster_plot_metabolite_class <- long_cluster %>% 
-  left_join(metabolite_class) %>% 
-  # mutate(Metabolite_class = ifelse(Metabolite_class %in% small_classes | is.na(Metabolite_class), "Other", Metabolite_class)) %>% 
-  ggplot(aes(x = day)) +
-  geom_line(data = centroids, aes(y = centroid), size = 1) +
-  geom_point(aes(y = spline, color = Metabolite_class)) +
-  geom_line(aes(group = metabolite, y = spline, color = Metabolite_class), alpha = 0.1) +
-  facet_wrap(~ cluster) +
-  theme_bw()
 
 plot_metabolite_class <- metabolite_class %>% 
-  ggplot(aes(x = Metabolite_class, fill = Metabolite_class)) +
-  geom_bar() +
-  scale_x_discrete(guide = guide_axis(angle = 90)) +
-  facet_wrap(~ cluster) +
-  theme_bw()
-
-plot_metabolite_class_alt <- metabolite_class %>% 
+  # mutate(class = ifelse(class %in% small_classes | is.na(class), "Other", class)) %>% 
+  filter(!is.na(class)) %>% 
   left_join(metabolite_class) %>% 
-  ggplot(aes(x = Metabolite_class, fill = as.factor(cluster))) +
+  ggplot(aes(x = class, fill = as.factor(cluster))) +
   geom_bar() +
   scale_x_discrete(guide = guide_axis(angle = 90)) +
   scale_fill_lei(palette = "five") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
   theme_bw()
+
+pdf("results/figures/bar_classes_per_cluster.pdf", width = 6, height = 4)
+print(plot_metabolite_class)
+dev.off()
 #####
 
 #### Clustered metabolite profiles per patient ####
@@ -140,6 +121,7 @@ for (patient in patients) {
     combination <-  paste0(cl, patient)
     dat <- data.clusters.long %>% 
       filter(cluster == cl & subject.id == patient) %>% 
+      filter(!is.na(value)) %>% 
       select(day, subject.id, value)
     if (length(unique(dat$day)) < 4) {
       mean_measurement <- dat %>% group_by(day) %>% 
@@ -160,8 +142,7 @@ plot_data <- spline_patient %>%
   left_join(data.pretreated %>% select(subject.id, curb, age, hospitalization.time) %>% distinct()) %>% 
   filter(!is.na(value))
 
-plot_data %>% 
-  filter(subject.id != "78") %>% 
+plot_patient_clusters <- plot_data %>% 
   ggplot(aes(x = day, y = value, group = cluster, color = as.factor(cluster))) +
   geom_hline(yintercept = 0, color = "grey65") +
   geom_hline(yintercept = c(-0.5, 0.5), linetype = 2, color = "grey65") +
@@ -172,59 +153,9 @@ plot_data %>%
   scale_x_time_squish() +
   theme_bw()
 
-plot_data %>% 
-  filter(subject.id != "78") %>% 
-  #filter(day != 30) %>% 
-  ggplot(aes(x = day, y = value, color = as.factor(curb))) +
-  geom_line(aes(group = subject.id), alpha = 0.7) +
-  geom_point() +
-  facet_wrap(~ cluster, scales = "free_y") +
-  scale_x_time_squish() +
-  theme_bw()
-
-plot_data %>% 
-  filter(day != 30) %>% 
-  ggplot(aes(x = day, y = value, color = log(hospitalization.time))) +
-  geom_line(aes(group = subject.id), alpha = 0.7) +
-  geom_point() +
-  scale_color_lei(discrete = F) +
-  facet_wrap(~ cluster, scales = "free_y") +
-  theme_bw()
-
-#### Splines over all metabolites for each patient ####
-spline_one <- as.data.frame(matrix(ncol = 5, nrow = length(patients)))
-names(spline_one) <- paste0("V", c("0", "1", "2", "4", "30"))
-spline_one$subject.id <- patients
-rownames(spline_one) <- spline_one$subject.id
-
-for (patient in unique(data.clusters.long$subject.id)) {
-  dat <- data.clusters.long %>% 
-    filter(subject.id == patient) %>% 
-    select(day, subject.id, value)
-  
-  if (length(unique(dat$day)) < 4) {
-    mean_measurement <- dat %>% group_by(day) %>% 
-      dplyr::summarize(mean_value = mean(value))
-    
-    spline_one[patient, paste0("V", mean_measurement$day)] <- mean_measurement$mean_value
-    next
-  }
-  spline_met <- smooth.spline(x = dat$day, y = dat$value)
-  spline_one[patient, 1:5] <- predict(spline_met, x = c(0, 1, 2, 4, 30))$y
-}
-
-plot_data_one <- spline_one %>% 
-  pivot_longer(-c(subject.id), names_prefix = "V", names_to = "day") %>% 
-  mutate(day = as.numeric(day)) %>%
-  left_join(data.pretreated %>% select(subject.id, curb, age) %>% distinct()) %>% 
-  filter(!is.na(value))
-
-plot_data_one %>%  
-  ggplot(aes(x = day, group = subject.id, y = value, color = as.factor(curb))) +
-  geom_line(alpha = 0.7) +
-  geom_point() +
-  theme_bw()
-
+pdf("results/figures/cluster_plot_splines_patients.pdf", width = 9, height = 6)
+print(plot_patient_clusters)
+dev.off()
 
 #### Spline CRP ####
 infl.markers.longitudinal <- read.spss("data/raw/aanvullende data ilona 1762021.sav", 
@@ -236,35 +167,13 @@ dat_crp_long <- dat_crp %>%
   mutate(crp_value = log2(crp_value + 1)) %>% #Log transform
   mutate(crp_value = (crp_value - mean(crp_value)) / sd(crp_value)) %>% #Scale
   mutate(day = as.numeric(gsub("CRP_|CRP_dg", "", day)))
+
+
 spline_crp <- smooth.spline(x = as.numeric(as.character(dat_crp_long$day)), y = dat_crp_long$crp_value)
 long_crp <- data.frame(day = spline_crp$x, spline = spline_crp$y) %>% 
   left_join(dat_crp_long %>% group_by(day) %>% dplyr::summarize(mean_crp = mean(crp_value, na.rm = T)))
 
 #### Visualize CRP and clustered metabolite data ####
-# Separate plot for CRP
-long_crp %>% 
-  ggplot(aes(x = day, y = spline))+
-  geom_point(color = "black")+
-  geom_line(color = "black")+
-  geom_point(data = dat_crp_long, aes(x = as.numeric(as.character(day)), y = crp_value, color = as.factor(Studienr)))+
-  scale_color_lei(palette = "mixed")+
-  labs(x = "Days after hospital admission", y = "Scaled CRP levels", color = "Patient number")+
-  theme_bw()
-
-
-# Plotting
-long_cluster %>% 
-  ggplot(aes(x = day, color = as.factor(cluster))) +
-  geom_point(aes(y = spline), size = 0.5) +
-  geom_line(aes(group = metabolite, y = spline), alpha = 0.1) +
-  geom_line(data = centroids, aes(y = centroid), size = 1, alpha = 0.9) +
-  scale_color_lei(palette = "five") +
-  geom_line(data = long_crp, aes(x = day, y = spline), size = 0.75, alpha = 0.9, color = "black", linetype = "dashed")+
-  labs(x = "Days after hospital admission", y = "Scaled metabolite levels", color = "Cluster", linetype = "Cluster")+
-  theme_bw()
-
-
-
 #metabolites_of_interest <- unique(c("PC.34.1.", grep("LPC.", long_cluster$metabolite, value = TRUE)))
 #4:0, 16:0, 16:1, 18:3, en 20:4
 metabolites_of_interest <- c("PC.34.1.", "LPC.14.0.", "LPC.16.0.", "LPC.16.1.", "LPC.18.3.", "LPC.20.4.")
@@ -273,14 +182,14 @@ metabolite_names <- read.xlsx("data/Metabolite_names_V2_incl_ratios.xlsx") %>%
   select(-Metabolite_name)
 
 
-plot_data <-  long_cluster %>% 
+plot_data <- long_cluster %>% 
   filter(metabolite %in% metabolites_of_interest) %>% 
   mutate(cluster = as.character(cluster)) %>% 
   bind_rows(long_crp %>%  mutate(metabolite = "CRP", cluster = "CRP") %>% select(metabolite, cluster, day, spline)) %>% 
   group_by(metabolite, cluster) %>%
-  mutate(y_label = spline[day == 30]) %>% 
+  dplyr::mutate(y_label = spline[day == 30]) %>% 
   ungroup() %>% 
-  mutate(CRP = ifelse(cluster == "CRP", "CRP", "")) %>% 
+  dplyr::mutate(CRP = ifelse(cluster == "CRP", "CRP", "")) %>% 
   left_join(metabolite_names) %>% 
   mutate(metabolite = ifelse(is.na(metabolite_name), metabolite, metabolite_name))
 
@@ -301,7 +210,7 @@ pdf(file = "results/figures/LPC_PC_CRP_timecurves.pdf", height = 3.5, width = 5)
 print(lpc_plot)
 dev.off()
 
-
+#######################
 #over time with hosp time
 load("results/linear_model_results.Rdata")
 metabolite_hosp <- results_lmm %>% 
@@ -353,15 +262,16 @@ dev.off()
 #### Instead of cluster use metabolite class for splines ####
 
 data.class.long <- data.clusters.long %>% 
-  left_join(metabolite_class) %>% filter(!is.na(Metabolite_class))
+  left_join(names_and_class) %>% filter(!is.na(class)) %>% 
+  filter(!is.na(value))
 
 
-nr_classes <- length(unique(data.class.long$Metabolite_class))
+nr_classes <- length(unique(data.class.long$class))
 spline_data_class <- as.data.frame(matrix(ncol = 5, nrow = nr_classes))
-rownames(spline_data_class) <- unique(data.class.long$Metabolite_class)
-for (met_class in unique(data.class.long$Metabolite_class)) {
+rownames(spline_data_class) <- unique(data.class.long$class)
+for (met_class in unique(data.class.long$class)) {
   dat <- data.class.long %>% 
-    filter(Metabolite_class %in% met_class)
+    filter(class %in% met_class)
   spline_met <- smooth.spline(x = dat$day, y = dat$value)
   spline_data_class[met_class, ] <- spline_met$y
 }
@@ -369,52 +279,65 @@ for (met_class in unique(data.class.long$Metabolite_class)) {
 
 colnames(spline_data_class)[1:5] <- sort(unique(dat$day))
 long_class <- spline_data_class %>% 
-  rownames_to_column("Metabolite_class") %>% 
-  pivot_longer(-Metabolite_class, names_to = "day", values_to = "spline") %>% 
+  rownames_to_column("class") %>% 
+  pivot_longer(-class, names_to = "day", values_to = "spline") %>% 
   mutate(day = as.numeric(day))
 
 
 ### Visualization ####
-cluster_plot_class <- long_class %>% 
-  filter(!Metabolite_class %in% small_classes) %>% 
-  ggplot(aes(x = day, color = as.factor(Metabolite_class))) +
-  geom_line(aes(y = spline), size = 2) +
-  theme_bw()
-
 cluster_plot_class_facets <- long_cluster %>% 
   left_join(metabolite_class) %>% 
-  filter(!Metabolite_class %in% small_classes) %>% 
+  filter(!is.na(class)) %>% 
+  filter(!class %in% small_classes) %>% 
+  mutate(class = gsub("-", "- ", class)) %>% 
+  mutate(class = gsub("phosphatidyl", "phosphatidyl ", class)) %>% 
   ggplot(aes(x = day)) +
-  geom_line(aes(y = spline, group = metabolite, color = as.factor(Metabolite_class)), alpha = 0.5) +
-  geom_line(data = long_class %>% filter(!Metabolite_class %in% small_classes), 
+  geom_line(aes(y = spline, group = metabolite, color = as.factor(class)), alpha = 0.5) +
+  geom_line(data = long_class %>% filter(!class %in% small_classes) %>% 
+              mutate(class = gsub("-", "- ", class)) %>% 
+              mutate(class = gsub("phosphatidyl", "phosphatidyl ", class)), 
             aes(y = spline), color = "black", show.legend = F) +
-  facet_wrap(~ Metabolite_class) +
+  facet_wrap(~ class, labeller = labeller(class = label_wrap_gen(15))) +
   scale_x_time_squish() +
-  theme_bw()
+  theme_bw() +
+  theme(legend.position = "none") 
 
 cluster_plot_class_facets_all <- long_cluster %>% 
-  left_join(metabolite_class) %>%
+  left_join(names_and_class) %>%
+  filter(!is.na(class)) %>% 
   ggplot(aes(x = day)) +
-  geom_line(aes(y = spline, group = metabolite, color = as.factor(Metabolite_class)), alpha = 0.5) +
+  geom_line(aes(y = spline, group = metabolite, color = as.factor(class)), alpha = 0.5) +
   geom_line(data = long_class, aes(y = spline), color = "black", show.legend = F) +
-  facet_wrap(~ Metabolite_class) +
+  facet_wrap(~ class, labeller = labeller(groupwrap = label_wrap_gen())) +
   scale_x_time_squish() +
-  theme_bw()
+  theme_bw() +
+  theme(legend.position = "none") 
+
+pdf("results/figures/splines_metabolite_classes.pdf", width = 10, height = 10)
+print(cluster_plot_class_facets_all)
+#print(cluster_plot_class_facets_all_subj)
+dev.off()
+
 
 cluster_plot_class_facets_all_subj <- long_cluster %>% 
-  left_join(metabolite_class) %>%
-  filter(!Metabolite_class %in% small_classes) %>% 
+  left_join(names_and_class) %>%
+  filter(!class %in% small_classes) %>% 
   ggplot(aes(x = day)) +
-  geom_line(data = data.class.long %>% filter(!Metabolite_class %in% small_classes), aes(y = value, group = paste(metabolite, subject.id)), alpha = 0.1, color = "grey65", show.legend = F) +
-  geom_line(aes(y = spline, group = metabolite, color = as.factor(Metabolite_class)), alpha = 0.5) +
-  geom_line(data = long_class %>% filter(!Metabolite_class %in% small_classes), aes(y = spline), color = "black", show.legend = F) +
-  facet_wrap(~ Metabolite_class) +
+  geom_line(data = data.class.long %>% filter(!class %in% small_classes), aes(y = value, group = paste(metabolite, subject.id)), alpha = 0.1, color = "grey65", show.legend = F) +
+  geom_line(aes(y = spline, group = metabolite, color = as.factor(class)), alpha = 0.5) +
+  geom_line(data = long_class %>% filter(!class %in% small_classes), aes(y = spline), color = "black", show.legend = F) +
+  facet_wrap(~ class) +
   scale_y_continuous(limits = c(-1.2, 1.2)) +
   scale_x_time_squish() +
   theme_bw()
 
-pdf("results/figures/splines_metabolite_classes.pdf", width = 10, height = 10)
-print(cluster_plot_class_facets)
-print(cluster_plot_class_facets_all_subj)
-dev.off()
 
+
+#Gather figures
+figure2 <- cluster_plot
+figureS1 <- plot_metabolite_class
+figureS2 <- cluster_plot_class_facets
+figureS3 <- plot_patient_clusters
+figure4 <- lpc_plot
+
+save(figure2, figureS1, figureS2, figureS3, figure4, file = "manuscript/figures/plots_Kmeans.Rdata")

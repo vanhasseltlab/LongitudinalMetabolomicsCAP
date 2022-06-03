@@ -1,0 +1,63 @@
+#Put figures together
+library(gridExtra)
+
+
+#Figures from Kmeans script
+load("manuscript/figures/plots_Kmeans.Rdata")
+
+png(filename = "manuscript/figures/figure2.png", res = 600, width = 6, height = 3.5, units = "in")
+print(figure2)
+dev.off()
+
+png(filename = "manuscript/figures/figureS1.png", res = 300, width = 7, height = 4.5, units = "in")
+print(figureS1)
+dev.off()
+
+png(filename = "manuscript/figures/figureS2.png", res = 300, width = 7, height = 9, units = "in")
+print(figureS2)
+dev.off()
+
+png(filename = "manuscript/figures/figureS3.png", res = 300, width = 10, height = 8.5, units = "in")
+print(figureS3)
+dev.off()
+
+png(filename = "manuscript/figures/figure4.png", res = 600, width = 6, height = 3.5, units = "in")
+print(figure4)
+dev.off()
+
+#Figures from correlations script
+load("manuscript/figures/plots_correlations.Rdata")
+
+png(filename = "manuscript/figures/figure3.png", res = 600, width = 3.5, height = 4, units = "in")
+print(figure3)
+dev.off()
+
+png(filename = "manuscript/figures/figure5.png", res = 600, width = 6, height = 3.5, units = "in")
+print(figure5)
+dev.off()
+
+png(filename = "manuscript/figures/figureS4.png", res = 300, width = 6, height = 9, units = "in")
+print(figureS4)
+dev.off()
+
+png(filename = "manuscript/figures/figureS5.png", res = 600, width = 4.3, height = 5.5, units = "in")
+print(figureS5)
+dev.off()
+
+
+#Figures from PCA script
+load("manuscript/figures/plots_PCA.Rdata")
+
+png(filename = "manuscript/figures/figure6.png", res = 600, width = 6, height = 6, units = "in")
+grid.arrange(figure6a + labs(tag = "A"), figure6b + labs(tag = "B"), figure6c+ labs(tag = "C"), layout_matrix = rbind(c(1,1), c(2,3)))
+dev.off()
+
+
+png(filename = "manuscript/figures/figureS6.png", res = 300, width = 0.75*9, height = 9, units = "in")
+print(figureS6)
+dev.off()
+
+
+
+
+

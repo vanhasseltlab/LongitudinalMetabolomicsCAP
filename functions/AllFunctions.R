@@ -1,5 +1,4 @@
 ## This script contains all functions nessecary to reproduce the data from the Longitudinal Metabolomics project
-library(plyr)
 library(foreign)
 library(openxlsx)
 
@@ -47,26 +46,26 @@ ReduceData <- function(data.raw){
                     "leukocyte count" = "leuko_0",
                     "IL-6" = "IL6_0",
                     "IL-10" = "IL10_0",
-                    "hospitalization.time" = "Opnameduur")
+                    "hospitalization.time" = "Opnameduur",
+                    "death" = "dood_ontslag")
   
   patientdata <- select(data.raw, all_of(patient_vars))
   
   data.reduced <- bind_cols(metabolomicsdata, patientdata)
   
-  data.reduced$pathogen.group <- revalue(data.reduced$pathogen.group, c(
-    "Streptococcus pneumoniae" = "S. pneumoniae"))
+  data.reduced$pathogen.group <- recode(data.reduced$pathogen.group, `Streptococcus pneumoniae` = "S. pneumoniae")
   
-  data.reduced$psi.score <- revalue(data.reduced$psi.score, c(
-    "0" = "0-50",
-    "<70" = "51-70", 
-    "71-90" = "71-90", 
-    "91-130" = "91-130", 
-    ">130" = "131-395"))
+  data.reduced$psi.score <- recode(data.reduced$psi.score, 
+                                   `0` = "0-50", `<70` = "51-70", 
+    `71-90` = "71-90", 
+    `91-130 `= "91-130", 
+    `>130` = "131-395")
   data.reduced$psi.score <- factor(data.reduced$psi.score, levels = c("0-50", "51-70", "71-90","91-130", "131-395"))
   
   #Translate Dutch to English
-  data.reduced$sex <- revalue(data.reduced$sex, c("man" = "Male", "vrouw" = "Female"))
-  data.reduced$race <- revalue(data.reduced$race, c("wit" = "White"))
+  data.reduced$sex <- recode(data.reduced$sex, man = "Male", vrouw = "Female")
+  data.reduced$race <- recode(data.reduced$race, wit = "White")
+  data.reduced$death <- recode(data.reduced$death, levend = "alive", dood = "dead")
   
   ja_nee_columns <- which(apply(data.reduced, 2, function(x) any(x == "ja" | x == "nee", na.rm = T)))
   
@@ -91,28 +90,21 @@ ReduceData <- function(data.raw){
   return(data.reduced)
 }
 DataCleaning <- function(dat, metrange) {
-  # This function removes samples (rows) with no metabolomics measurements in at 
-  # least one platform (>10 missing metabolites) and then removes metabolites 
-  # (columns) with missing values.
+  # This function removes metabolites (columns) with missing values. And patients with
+  # death outcome
   nonmetrange <-  setdiff(names(dat), metrange)
   
-  # Subset metabolites from data
-  dat.subset <- dat[, metrange]
-  # Calculate the numer of NA's per row
-  narows <- apply(dat.subset, 1, function(X){sum(is.na(X))})
-  # Subset metabolomics data keeping only rows with les then 10 missing metabolites
-  dat.2 <- dat[narows < 10, ]
-  
+  dat1 <- dat[dat$death == "alive", ]
   # Subset metabolites from partly cleaned dataset
-  dat.subset.2 <- dat.2[, metrange]
+  dat.subset.2 <- dat1[, metrange]
   # Calculate the numer of NA's per column
-  nacols <- apply(dat.subset.2, 2, function(X){sum(is.na(X))})
+  nacols <- apply(dat.subset.2, 2, function(X) {sum(is.na(X))})
   # keep column names of metabolites without missing metabolites
-  keep <- colnames(dat.subset.2[, nacols==0])
+  keep <- colnames(dat.subset.2[, nacols < 5])
   
   # Combine cleaned metabolomicsdat with non-metabolomicsdat 
   #  and return clean dat set.
-  dat.clean <- cbind(dat.2[, keep], dat.2[, nonmetrange])
+  dat.clean <- cbind(dat1[, keep], dat1[, nonmetrange])
   attr(dat.clean, "metrange") <- keep
   
   return(dat.clean)
@@ -129,13 +121,13 @@ DataPretreatment <- function(dat, metrange, scaling = "auto") {
     # Autoscaling of log transformed data. 
     data.pretreated <- logdata
     data.pretreated[, metrange] <- apply(data.pretreated[, metrange], MARGIN = 2, FUN = function(x) {
-      (x - mean(x)) / sd(x)
+      (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
     })
   } else if (scaling == "pareto") {
     # Paretoscaling of log transformed data (using the square root of the SD)
     data.pretreated <- logdata
     data.pretreated[, metrange] <- apply(data.pretreated[, metrange], MARGIN = 2, FUN = function(x) {
-      (x - mean(x)) / sqrt(sd(x))
+      (x - mean(x, na.rm = TRUE)) / sqrt(sd(x, na.rm = TRUE))
     })
   } else { 
     print("Please set scaling to auto or pareto")}
@@ -304,7 +296,7 @@ AddCRPAndPCT <- function(dat) {
   
   AB_switch <- infl.markers.longitudinal %>% 
     mutate(subject.id = as.character(Studienr)) %>% select(subject.id, AB_switch) %>% 
-    mutate(AB_switch = revalue(AB_switch, c("ja" = "Yes", "nee" = "No")))
+    mutate(AB_switch = recode(AB_switch, ja = "Yes", nee = "No"))
   
   ## Add CRP and PCT to reduced data frame
   data.full <- dat %>% 
@@ -320,79 +312,52 @@ AddCRPAndPCT <- function(dat) {
 
 #calculates different sums and ratios
 AddRatiosAndSums <- function(data.clean) {
-  attach(data.clean)
-  ## Assemble metabolite ratio data.cleanaset
-  ratios <- data.frame(sample.id = sample.id, pathogen = pathogen)
-  #Sums
-  ratios$BCAA_sum <- L.Isoleucine + L.Leucine + L.Valine
-  ratios$TCA_cycle_sum <- OA03_._Citric_acid + OA07_._Lactic_acid + 
-    OA08_._Malic_acid + OA12_._Fumaric_acid
-  ratios$urea_cycle_sum <- Citrulline + L.Arginine + 
-    Ornithine + OA12_._Fumaric_acid
-  ratios$lc_Carnitines_sum <- Myristoilcarnitine + Hexadecenoylcarntine + 
-    Palmitoylcarnitine + Stearoylcarnitine + 
-    Dodecenoylcarnitine + Tetradecenoylcarnitine + 
-    Linoleylcarnitine + Oleylcarnitine + 
-    Tetradecadienylcarntine
-  ratios$mc_Carnitines_sum <- Hexanoylcarnitine + Octanoylcarnitine + 
-    Octenoylcarnitine + Decanoylcarnitine + 
-    Lauroylcarnitine + Nonaylcarnitine + 
-    Pimeylcarnitine + Decenoylcarnitine
-  ratios$sc_Carnitines_sum <- Acetylcarnitine + Propionylcarnitine + 
-    Isobutyrylcarnitine + Butyrylcarnitine + 
-    Tiglylcarnitine + X2.methylbutyroylcarnitine + 
-    Isovalerylcarnitine
-  ratios$Cer_sum <- Cer.d18.1.22.1. + Cer.d18.1.24.1. + 
-    Cer.d18.1.24.0. + Cer.d18.1.16.0. + 
-    Cer.d18.1.23.0. + Cer.d18.0.24.0.
-  ratios$SM_sum <- SM.d18.1.14.0. + SM.d18.1.15.0. +
-    SM.d18.1.16.1. + SM.d18.1.16.0. +
-    SM.d18.1.17.0. + SM.d18.1.18.2. +
-    SM.d18.1.18.1. + SM.d18.1.18.0. +
-    SM.d18.1.20.1. + SM.d18.1.20.0. +
-    SM.d18.1.21.0. + SM.d18.1.22.1. +
-    SM.d18.1.22.0. + SM.d18.1.23.1. +
-    SM.d18.1.23.0. + SM.d18.1.24.2. +
-    SM.d18.1.24.1. + SM.d18.1.24.0. +
-    SM.d18.1.25.1. + SM.d18.1.25.0.
-  ratios$LPC_sum <- LPC.14.0. + LPC.16.0. + LPC.16.1. + LPC.18.0. +
-    LPC.18.1. + LPC.18.2. + LPC.18.3. + LPC.20.4. + LPC.20.5. +
-    LPC.22.6. + LPC.O.16.1. + LPC.O.18.1.
-  ratios$PC_sum <- PC.32.2. + PC.32.1. + PC.32.0. + PC.O.34.3. +
-    PC.O.34.2. + PC.O.34.1. + PC.34.4. + PC.34.3. + 
-    PC.34.2. + PC.34.1. + PC.O.36.6. + PC.O.36.5. + 
-    PC.O.36.4. + PC.O.36.3. + PC.O.36.2. + PC.36.6. +
-    PC.36.5. + PC.36.4. + PC.36.3. + PC.36.2. +
-    PC.36.1. + PC.O.38.7. + PC.O.38.6. + PC.O.38.5. +
-    PC.O.38.4. + PC.38.7. + PC.38.6. + PC.38.5. +
-    PC.38.4. + PC.38.3. + PC.38.2. + PC.O.40.6. +
-    PC.40.8. + PC.40.7. + PC.40.6. + PC.40.4. +
-    PC.O.42.6. + PC.O.44.5. + PC.40.5.
-  
-  #Ratio's
-  ratios$HT5_Trp_ratio <- Serotonine / L.Tryptophan # Check if this one is correct
-  ratios$ADMA_Arg_ratio <- ADMA / L.Arginine
-  ratios$SDMA_Arg_ratio <- SDMA / L.Arginine
-  ratios$Carnitine_sum_lc_Carnitines_ratio <- Carnitine / ratios$lc_Carnitines_sum 
-  ratios$Carnitine_sum_mc_Carnitines_ratio <- Carnitine / ratios$mc_Carnitines_sum 
-  ratios$Carnitine_sum_sc_Carnitines_ratio <- Carnitine / ratios$sc_Carnitines_sum 
-  ratios$DCA_CA_ratio <- DCA / CA
-  ratios$FA_14.1_14.0 <- FA..14.1. / FA..14.0.
-  ratios$FA_16.1_16.0 <- FA..16.1. / FA..16.0.
-  ratios$Gln_Glu <- L.Glutamine / L.Glutamic.acid
-  ratios$Kyn_Trp <- L.Kynurenine / L.Tryptophan
-  ratios$sum_BCAA_sum_Phe_Tyr_ratio <-  ratios$BCAA_sum / (L.Phenylalanine + 
-                                                             L.Tyrosine)
-  ratios$sum_CER_sum_SM_ratio <- ratios$Cer_sum / ratios$SM_sum
-  ratios$sum_LPC_sum_PC_ratio <- ratios$LPC_sum / ratios$PC_sum
-    
-  detach(data.clean)
+  ratios <- with(data.clean, 
+      data.frame(sample.id = sample.id, pathogen = pathogen) %>% 
+      #Add Sums
+      mutate(BCAA_sum = L.Isoleucine + L.Leucine + L.Valine,
+             TCA_cycle_sum = OA03_._Citric_acid + OA07_._Lactic_acid + OA08_._Malic_acid + OA12_._Fumaric_acid,
+             urea_cycle_sum = Citrulline + L.Arginine + Ornithine + OA12_._Fumaric_acid,
+             lc_Carnitines_sum = Myristoilcarnitine + Hexadecenoylcarntine + 
+             Palmitoylcarnitine + Stearoylcarnitine + Dodecenoylcarnitine + Tetradecenoylcarnitine + 
+               Linoleylcarnitine + Oleylcarnitine + Tetradecadienylcarntine,
+             mc_Carnitines_sum = Hexanoylcarnitine + Octanoylcarnitine + Octenoylcarnitine + 
+               Decanoylcarnitine + Lauroylcarnitine + Nonaylcarnitine + Pimeylcarnitine + Decenoylcarnitine,
+             sc_Carnitines_sum = Acetylcarnitine + Propionylcarnitine + Isobutyrylcarnitine + 
+               Butyrylcarnitine + Tiglylcarnitine + X2.methylbutyroylcarnitine + Isovalerylcarnitine,
+             Cer_sum = Cer.d18.1.22.1. + Cer.d18.1.24.1. + Cer.d18.1.24.0. + Cer.d18.1.16.0. + 
+               Cer.d18.1.23.0. + Cer.d18.0.24.0.,
+             SM_sum = SM.d18.1.14.0. + SM.d18.1.15.0. + SM.d18.1.16.1. + SM.d18.1.16.0. + SM.d18.1.17.0. + 
+               SM.d18.1.18.2. + SM.d18.1.18.1. + SM.d18.1.18.0. + SM.d18.1.20.1. + SM.d18.1.20.0. +
+               SM.d18.1.21.0. + SM.d18.1.22.1. + SM.d18.1.22.0. + SM.d18.1.23.1. + SM.d18.1.23.0. + SM.d18.1.24.2. +
+               SM.d18.1.24.1. + SM.d18.1.24.0. + SM.d18.1.25.1. + SM.d18.1.25.0.,
+             LPC_sum = LPC.14.0. + LPC.16.0. + LPC.16.1. + LPC.18.0. + LPC.18.1. + LPC.18.2. + 
+               LPC.18.3. + LPC.20.4. + LPC.20.5. + LPC.22.6. + LPC.O.16.1. + LPC.O.18.1.,
+             PC_sum = PC.32.2. + PC.32.1. + PC.32.0. + PC.O.34.3. + PC.O.34.2. + PC.O.34.1. + PC.34.4. + 
+               PC.34.3. + PC.34.2. + PC.34.1. + PC.O.36.6. + PC.O.36.5. + PC.O.36.4. + PC.O.36.3. + PC.O.36.2. + 
+               PC.36.6. + PC.36.5. + PC.36.4. + PC.36.3. + PC.36.2. + PC.36.1. + PC.O.38.7. + PC.O.38.6. + 
+               PC.O.38.5. + PC.O.38.4. + PC.38.7. + PC.38.6. + PC.38.5. + PC.38.4. + PC.38.3. + PC.38.2. + 
+               PC.O.40.6. + PC.40.8. + PC.40.7. + PC.40.6. + PC.40.4. + PC.O.42.6. + PC.O.44.5. + PC.40.5.) %>% 
+      #Add ratios
+      mutate(HT5_Trp_ratio = Serotonine / L.Tryptophan,
+             ADMA_Arg_ratio = ADMA / L.Arginine,
+             SDMA_Arg_ratio = SDMA / L.Arginine,
+             Carnitine_sum_lc_Carnitines_ratio = Carnitine / lc_Carnitines_sum,
+             Carnitine_sum_mc_Carnitines_ratio = Carnitine / mc_Carnitines_sum, 
+             Carnitine_sum_sc_Carnitines_ratio = Carnitine / sc_Carnitines_sum, 
+             DCA_CA_ratio = DCA / CA,
+             FA_14.1_14.0 = FA..14.1. / FA..14.0.,
+             FA_16.1_16.0 = FA..16.1. / FA..16.0.,
+             Gln_Glu = L.Glutamine / L.Glutamic.acid,
+             Kyn_Trp = L.Kynurenine / L.Tryptophan,
+             sum_BCAA_sum_Phe_Tyr_ratio =  BCAA_sum / (L.Phenylalanine + L.Tyrosine),
+             sum_CER_sum_SM_ratio = Cer_sum / SM_sum,
+             sum_LPC_sum_PC_ratio = LPC_sum / PC_sum))
   
   data.ratios <- data.clean %>% left_join(ratios, by = c("sample.id", "pathogen"))
   
   attr(data.ratios, "ratiorange") <- setdiff(colnames(ratios), c("sample.id", "pathogen"))
   
   return(data.ratios)
-  
 }
 
