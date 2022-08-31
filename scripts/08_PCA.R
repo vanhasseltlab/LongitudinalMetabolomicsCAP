@@ -27,22 +27,38 @@ pca_metabolites <- data.full.scaled[!is.na(rowSums(data.full.scaled[, metrange])
 set.seed(123)
 pca_all_times <- prcomp(pca_metabolites)
 
+write.csv(pca_all_times[["rotation"]], file = "results/pca_loadings.csv", row.names = T)
+
 pca_data <- data.frame(data.full.scaled[rownames(pca_metabolites), c("day", "subject.id", "hospitalization.time", "curb", "age", "sex")], 
                        pca_all_times$x[, 1:4])
 
 plot_pca_per_timepoint <- pca_data %>% 
   ggplot(aes(x = PC1, y = PC2, color = hospitalization.time)) +
   geom_point() +
-  scale_color_viridis_c(direction = -1) +
+  #scale_color_viridis_c(direction = -1) +
+  scale_color_lei(palette = "gradient", discrete = FALSE) +
   facet_grid(~ day) +
   coord_equal() +
   theme_bw() +
   theme(legend.position = "bottom")
 
+plot_pca_per_timepoint_begin <- pca_data %>% 
+  mutate(day = paste("Day", day)) %>% 
+  mutate(day = factor(day, levels = paste("Day", c(0, 1, 2, 4, 30)))) %>% 
+  ggplot(aes(x = PC1, y = PC2, color = subject.id)) +
+  geom_point(show.legend = F) +
+  #scale_color_viridis_c(direction = -1) +
+  scale_color_lei(palette = "nine", discrete = TRUE) +
+  facet_grid(~ day) +
+  coord_equal() +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+
 plot_pca_per_timepoint_curb <- pca_data %>% 
   ggplot(aes(x = PC1, y = PC2, color = as.factor(curb))) +
   geom_point() +
-  scale_color_viridis_d(direction = -1) +
+  scale_color_lei(palette = "mixed", discrete = TRUE) +
   facet_grid(~ day) +
   coord_equal() +
   theme_bw() +
@@ -147,11 +163,11 @@ dev.off()
 
 
 #Gather figures
-figure6a <- plot_pca_per_timepoint
+figure6a <- plot_pca_per_timepoint_begin
 figure6b <- plot_PC_time_curve("PC1", color = "hospitalization.time") +
-  scale_color_viridis_c(direction = -1)
+  scale_color_lei(palette = "gradient", discrete = FALSE)
 figure6c <- plot_PC_time_curve("PC2", color = "hospitalization.time") +
-  scale_color_viridis_c(direction = -1)
+  scale_color_lei(palette = "gradient", discrete = FALSE)
 figureS6 <- pca_plot
 
 save(figure6a, figure6b, figure6c, figureS6, file = "manuscript/figures/plots_PCA.Rdata")

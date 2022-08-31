@@ -4,17 +4,19 @@
 
 # Create vector with 8 Leiden university / LACDR colors
 lei_colors <- c(
-  `blue`       = "#001158",
-  `orange`     = "#FF9933", 
-  `red`        = "#be1908",
-  `lightgreen` = "#aaad00",
-  `brightgreen`= "#06bd09",
-  `darkgreen`  = "#2c712d",
-  `turquoise`  = "#34a3a9",
-  `lightblue`  = "#5cb1eb",
-  `brightblue` = "#0536fa",
-  `violet`     = "#b02079",
-  `black`      = "#000000")
+  `blue`        = "#001158",
+  `orange`      = "#FF9933",
+  `red`         = "#be1908",
+  `lightgreen`  = "#aaad00",
+  `brightgreen` = "#06bd09",
+  `darkgreen`   = "#2c712d",
+  `turquoise`   = "#34a3a9",
+  `lightblue`   = "#5cb1eb",
+  `brightblue`  = "#0536fa",
+  `violet`      = "#b02079",
+  `black`       = "#000000",
+  `soft orange` = "#f46e32",
+  `soft blue`   = "#8592BC")
 
 ## Function to extract the hex codes from this vector by name
 #' Function to extract lei colors as hex codes
@@ -37,7 +39,9 @@ lei_palettes <- list(
   `two`   = lei_cols("red", "violet"), 
   `five`  = lei_cols("blue", "lightblue", "orange", "red", "darkgreen"),
   `six`  = lei_cols("blue", "lightblue", "orange", "red", "darkgreen", "black"),
-  `nine`  = lei_cols("lightblue", "violet", "brightgreen",  "brightblue", "red", "lightgreen", "blue", "orange", "darkgreen"))
+  `nine`  = lei_cols("lightblue", "violet", "brightgreen",  "brightblue", "red", "lightgreen", "blue", "orange", "darkgreen"),
+  `gradient` = lei_cols("blue", "soft blue", "soft orange"),
+  `gradient2` = lei_cols("blue", "soft blue", "orange", "soft orange"))
 
 #' Return function to interpolate a lei color palette
 #' @param palette Character name of palette in lei_palettes

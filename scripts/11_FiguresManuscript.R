@@ -1,5 +1,6 @@
 #Put figures together
 library(gridExtra)
+library(tidyverse)
 
 
 #Figures from Kmeans script
@@ -21,19 +22,17 @@ png(filename = "manuscript/figures/figureS3.png", res = 300, width = 10, height 
 print(figureS3)
 dev.off()
 
-png(filename = "manuscript/figures/figure4.png", res = 600, width = 6, height = 3.5, units = "in")
-print(figure4)
-dev.off()
+write.csv(tableS2, file = "manuscript/tables/tableS2.csv")
 
 #Figures from correlations script
 load("manuscript/figures/plots_correlations.Rdata")
 
-png(filename = "manuscript/figures/figure3.png", res = 600, width = 3.5, height = 4, units = "in")
-print(figure3)
+png(filename = "manuscript/figures/figure3.png", res = 600, width = 3.5*2.5, height = 5, units = "in")
+grid.arrange(figure3a + labs(tag = "(A)"), figure3b + labs(tag = "(B)"), layout_matrix = t(c(1, 1, 1, 2, 2, 2, 2)))
 dev.off()
 
-png(filename = "manuscript/figures/figure5.png", res = 600, width = 6, height = 3.5, units = "in")
-print(figure5)
+png(filename = "manuscript/figures/figure4.png", res = 600, width = 10.05, height = 5, units = "in")
+grid.arrange(figure4a + labs(tag = "(A)"), figure4b + labs(tag = "(B)"), layout_matrix = t(c(1, 2)))
 dev.off()
 
 png(filename = "manuscript/figures/figureS4.png", res = 300, width = 6, height = 9, units = "in")
@@ -50,6 +49,11 @@ load("manuscript/figures/plots_PCA.Rdata")
 
 png(filename = "manuscript/figures/figure6.png", res = 600, width = 6, height = 6, units = "in")
 grid.arrange(figure6a + labs(tag = "A"), figure6b + labs(tag = "B"), figure6c+ labs(tag = "C"), layout_matrix = rbind(c(1,1), c(2,3)))
+dev.off()
+
+#
+png(filename = "manuscript/figures/figure6a.png", res = 600, width = 6, height = 3, units = "in")
+print(figure6a)
 dev.off()
 
 

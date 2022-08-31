@@ -41,6 +41,25 @@ data.full.scaled <- DataPretreatment(data.full.clean, metrange = attr(data.clean
 metrange <- attr(data.full, "metrange")
 nonmetrange <- setdiff(names(data.full), metrange)
 
+## Patient characteristics ---
+patient_chars <- c("age", "sex", "curb", "renal.disease", "congestive.heart.failure",
+                   "malignancy", "COPD", "diabetes", "duration.of.symptoms.before.admission",
+                   "antibiotic.treatment.before.admission", "corticosteroid.use.before.admission", 
+                   "hospitalization.time")
+patient_chars_labels <-  c("Age (years)", "Sex", "CURB score", "Kidney disease", "Cardiovascular disease",
+                           "Malignancy", "COPD", "Diabetes", "Duration of symptoms before admission (days)", 
+                           "Antibiotic treatment before admission", "Corticosteroid use before admission", 
+                           "Length of stay (days)")
+data_one_obs <- data.full.clean %>% 
+  distinct(subject.id, .keep_all = TRUE) %>% 
+  select(all_of(patient_chars), pathogen.group)
+
+variables <- as.list(patient_chars_labels)
+names(variables) <- patient_chars
+labels_list <- list(variables = variables,
+                    groups = list("S. pneumoniae"))
+table1(list(`CAP patients` = data_one_obs), labels = labels_list)
+
 ## Correlations ----
 
 ## Change in metabolite level (d0-d30) related to disease severity:

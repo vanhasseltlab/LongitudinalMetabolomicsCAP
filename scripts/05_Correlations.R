@@ -2,6 +2,7 @@
 library(tidyverse)
 library(readxl)
 source("functions/AllFunctions.R")
+source("functions/LeidenColoring.R")
 
 ## Input data -----------------------------------------------------------------
 dat.raw <- read.csv2("data/00_data_raw.csv")
@@ -22,6 +23,7 @@ data.pretreated <- DataPretreatment(data.rs, metrange = c(attr(data.rs, "metrang
 
 metrange <- c(attr(data.pretreated, "metrange"), attr(data.pretreated, "ratiorange"))
 names_and_class <- read.csv("data/metabolite_names_and_classes.csv", stringsAsFactors = F)
+names_and_class <- names_and_class %>% distinct()
 
 var_of_interest <- c("curb", "hospitalization.time")
 
@@ -65,11 +67,10 @@ cor_all <- cor_tdp %>% left_join(cor_mat2)
 
 
 ####Visualiza curb correlations####
-selected_metabolites <- c(slice_max(cor_all, curb_day30, n = 4)$metabolite, 
-                          slice_min(cor_all, curb_day30, n = 4)$metabolite)
+selected_metabolites <- c(slice_min(cor_all, curb_day30, n = 6)$metabolite)
 cor_all_names <- cor_all %>% 
   left_join(names_and_class)
-facet_names <- paste0(cor_all_names$name, " \ntau = ", round(cor_all$curb_day30, 3))
+facet_names <- paste0(cor_all_names$name, " \ntau = ", round(cor_all_names$curb_day30, 3))
 names(facet_names) <- cor_all_names$metabolite
 
 boxplot_curb_score_selection <- data.pretreated %>%
@@ -84,7 +85,9 @@ boxplot_curb_score_selection <- data.pretreated %>%
 
 #####
 ###Heatmap only PCT and CRP
-plot_correlation_heatmap <- function(correlation_matrix, variables = names(correlation_matrix)[-1], var_tdp = NULL, add = NULL) {
+plot_correlation_heatmap <- function(correlation_matrix, 
+                                     variables = names(correlation_matrix)[-1], 
+                                     var_tdp = NULL, add = NULL, just_data = FALSE) {
   heatmap_dat_3 <- correlation_matrix %>% 
     pivot_longer(-metabolite, names_to = "marker", values_to = "correlation") %>% 
     filter(marker %in% variables) %>% 
@@ -94,46 +97,46 @@ plot_correlation_heatmap <- function(correlation_matrix, variables = names(corre
     mutate(marker = factor(marker, levels = variables, 
                            labels = gsub("_", " - ", gsub(".", " ", variables, fixed = T), fixed = T))) %>% 
     mutate(group = ifelse(as.character(marker) %in% var_tdp, "Biomarker", gsub("[\\ \\-\\ ].*", "", marker))) %>% 
-    mutate(hor_facet = ifelse(name %in% add, "1", "0"))
+    mutate(hor_facet = ifelse(name %in% add, "1", "0")) %>% 
+    distinct()
+  
+  m <- as.matrix(heatmap_dat_3 %>% select(name, marker, correlation) %>% 
+                   pivot_wider(names_from = name, values_from = correlation) %>% 
+                   select(-marker))
+  clust <- hclust(dist(t(m)))
+  
+  if (just_data) {
+    return(list(data = heatmap_dat_3, m = m, clust = clust))
+  }
   
   corposterplot <- heatmap_dat_3 %>% 
     ggplot(aes(y = name, x = marker)) +
     geom_tile(aes(fill = as.numeric(correlation)))+
-    scale_fill_gradient2(name = "Correlation", low = "#001158", high = "#FF9933",
+    scale_fill_gradient2(name = "Correlation", low = "#001158", high = "#F54C00",
                          limits = c(-1, 1), 
                          #breaks = seq(-0.75, 0.75, 0.25),
                          breaks = seq(-1, 1, 0.25),
                          labels = seq(-1, 1, 0.25))+
     scale_x_discrete(guide = guide_axis(angle = 90), expand = expansion(mult  = c(0, 0))) +
-    scale_y_discrete(expand = expansion(mult  = c(0, 0))) +
-    facet_grid(hor_facet ~ group, scales = "free", space='free') +
+    scale_y_discrete(expand = expansion(mult  = c(0, 0)), limits= colnames(m)[clust$order]) +
+    
+    
+    facet_grid(. ~ group, scales = "free", space='free') +
     labs(x = NULL, y = "Metabolite") +
     theme_bw() +
     theme(strip.background = element_blank(), strip.text = element_blank())
   
-  return(corposterplot)
+  
+
+  if (is.null(add)) {
+    return(corposterplot)
+  } else {
+    intercepts <- sort(which(colnames(m)[clust$order] %in% add))
+    return(corposterplot + geom_hline(yintercept = c(intercepts - 0.5, intercepts + 0.5)) )
+  }
 }
 
-plot_correlation_heatmap(cor_all, var_tdp = c("CREA", "CRP", "PCT"))
-plot_correlation_heatmap(cor_all, variables = c("CRP", "PCT"), var_tdp = c("CRP", "PCT"))
-plot_correlation_heatmap(cor_all, variables = grep("hospitalization.time", names(cor_all), value = T), add = c("CRP", "PCT"))
-
-
-pdf(file = "results/figures/correlations_markers_metabolites.pdf", height = 10)
-plot_correlation_heatmap(cor_all, variables = grep("hospitalization.time", names(cor_all), value = T), add = c("CRP", "PCT"))
-dev.off()
-
-
-# Add correlations to general dataframe
-#cor_mat_2 <-data.frame(metabolite = rownames(cor_mat), marker = "CRP", correlation = as.data.frame(cor_mat)$V1)
-
-# Make subselection of data for plotting:
-# nr_top_and_bottom <- 3
-# top_and_bottom <- c(as.data.frame(cor_mat) %>% slice_max(V1, n = nr_top_and_bottom) %>% rownames,
-#                     as.data.frame(cor_mat) %>% slice_min(V1, n = nr_top_and_bottom) %>% rownames)
 # Plot correlations:
-facet_names <- paste0(rownames(cor_mat), " (cor = ", round(cor_mat[, 1], 3), ")")
-names(facet_names) <- rownames(cor_mat)
 #pdf("results/figures/CRP_metabolites_top10.pdf", width = 10)
 print(dat_met_tdp %>% 
         pivot_longer(-c(subject.id, day, CRP), names_to = "metabolite") %>%
@@ -147,14 +150,76 @@ print(dat_met_tdp %>%
         facet_wrap(~ metabolite, scales = "free_y") +
         theme_bw())
 #dev.off()
+dat_cor_plot <- plot_correlation_heatmap(cor_all, variables = grep("hospitalization.time", names(cor_all), value = T), 
+                                         just_data = T, add = c("CRP", "PCT"))
+intercepts <- sort(which(colnames(dat_cor_plot$m)[dat_cor_plot$clust$order] %in% c("CRP", "PCT")))
 
+hosp_metabolite_cor <- dat_cor_plot$data %>% 
+  mutate(day = gsub("hospitalization time - day", "Day ", marker, fixed = T)) %>% 
+  mutate(day = factor(day, levels = paste("Day", c(1, 2, 4, 30)))) %>% 
+  ggplot(aes(y = name, x = group)) +
+  geom_tile(aes(fill = as.numeric(correlation)))+
+  geom_hline(yintercept = c(intercepts - 0.5, intercepts + 0.5)) +
+  scale_fill_gradient2(name = "Correlation", low = "#001158", high = "#F54C00",
+                       limits = c(-1, 1), 
+                       #breaks = seq(-0.75, 0.75, 0.25),
+                       breaks = seq(-1, 1, 0.25),
+                       labels = seq(-1, 1, 0.25))+
+  scale_x_discrete(guide = guide_axis(angle = 90), expand = expansion(mult  = c(0, 0))) +
+  scale_y_discrete(expand = expansion(mult  = c(0, 0)), limits= colnames(dat_cor_plot$m)[dat_cor_plot$clust$order]) +
+  facet_grid(. ~ day, scales = "free", space='free') +
+  labs(x = "Length of stay", y = "Metabolite") +
+  theme_bw() +
+  theme(strip.background = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
+#select higher correlations hosp time
+highest_hosp_cor <- cor_all %>% 
+  filter(abs(hospitalization.time_day2) > 0.551) %>% 
+  arrange(desc(abs(hospitalization.time_day2))) %>% 
+  select(metabolite) %>% unlist %>% as.character
+
+data_figure4b <- data.pretreated %>% 
+  select(all_of(highest_hosp_cor), subject.id, day, hospitalization.time) %>% 
+  pivot_longer(all_of(highest_hosp_cor), names_to = "metabolite", values_to = "value") %>% 
+  pivot_wider(names_from = day, values_from = value) %>% 
+  mutate(`1` = `1` - `0`,
+         `2` = `2` - `0`,
+         `4` = `4` - `0`,
+         `30` = `30` - `0`,
+         `0` = 0) %>% 
+  pivot_longer(all_of(as.character(c(0, 1, 2, 4, 30))), names_to = "day")
+
+data_figure4b %>% 
+  mutate(day = as.numeric(day)) %>% 
+  #filter(day != 30) %>% 
+  #filter(day %in% c(0, 2)) %>% 
+  ggplot(aes(x = day, y = value, color = hospitalization.time)) +
+  geom_point() +
+  geom_line(aes(group = subject.id)) +
+  scale_color_lei(discrete = F, palette = "gradient2") +
+  scale_x_time_squish() +
+  facet_grid(~ metabolite) +
+  theme_bw()
+
+rownames(names_and_class) <- names_and_class$metabolite
+highest_cor_hosp_time <- data_figure4b %>% 
+  left_join(names_and_class) %>%
+  mutate(name = factor(name, levels = names_and_class[highest_hosp_cor, "name"] )) %>% 
+  filter(day == 2) %>% 
+  ggplot(aes(x = hospitalization.time, y = value)) +
+  geom_smooth(method = "lm", se = F, color = "grey55", size = 0.8) +
+  geom_point(aes(color = subject.id), show.legend = F) +
+  labs(x = "Length of stay", y = "Change in metabolite value from day 0 to day 2") +
+  scale_color_lei(discrete = T, palette = "nine") +
+  facet_wrap(~ name, nrow = 2) +
+  theme_bw()
 
 #Gather figures
-figure3 <- plot_correlation_heatmap(cor_all, variables = c("CRP", "PCT"), var_tdp = c("CRP", "PCT"))
+figure3a <- plot_correlation_heatmap(cor_all, variables = c("CRP", "PCT"), var_tdp = c("CRP", "PCT"),)
 figureS4 <- plot_correlation_heatmap(cor_all, var_tdp = c("CREA", "CRP", "PCT"), add = c("CRP", "PCT", "CREA"))
-figureS5 <- plot_correlation_heatmap(cor_all, variables = grep("hospitalization.time", names(cor_all), value = T), add = c("CRP", "PCT"))
-figure5 <- boxplot_curb_score_selection
+figure4a <- hosp_metabolite_cor
+figure4b <- highest_cor_hosp_time
+figureS5 <- boxplot_curb_score_selection
 
-save(figure3, figureS4, figureS5, figure5, file = "manuscript/figures/plots_correlations.Rdata")
+save(figure3a, figureS4, figureS5, figure4a, figure4b, file = "manuscript/figures/plots_correlations.Rdata")
 
