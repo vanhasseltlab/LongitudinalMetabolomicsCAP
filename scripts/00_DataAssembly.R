@@ -1,4 +1,4 @@
-# Load in raw spss file
+# Prepare data by combining patient data with measurements form different metabolomic platforms 
 
 # Load libraries
 library(foreign)
@@ -187,12 +187,11 @@ alldata_corrected <- filter(alldata_corrected, verwekker_1 != "H. Influenza")
 # # Diagnosisdata 
 # diagnosisdata <- subset(alldata_corrected, Day==0) 
 
-# Treatment resonse data (longitudinal)
+# Treatment resonse data (longitudinal) and rename IDs
 longitudinaldata <- alldata_corrected %>%
-  group_by(Studynr,Study_cohort) %>%
-  filter(length(Study_cohort)>1) %>%
+  group_by(Studynr, Study_cohort) %>%
+  filter(length(Study_cohort) > 1) %>%
   ungroup()
-
 
 ## Output data ----------------------------------------------------------------
 # All data

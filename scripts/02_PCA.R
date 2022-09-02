@@ -1,41 +1,34 @@
-##PCA
-source("functions/AllFunctions.R")
+# Exploratory analysis: visualize trends through dimension reduction (PCA) 
+
+# Load libraries
+library(tidyverse)
+
+# Load functions
 source("functions/LeidenColoring.R")
 
+# Load data from 01_DataPreparation (data.pretreated)
+load("data/01_data_clean.Rdata")
 
-# Load metabolomics data after quality control
-dat.raw <- read.csv2("data/00_data_raw.csv")
-# Remove redundant variables from data frame
-data.reduced <- ReduceData(dat.raw)
-#Remove metabolites with to many NAs
-data.clean <- DataCleaning(data.reduced, attr(data.reduced, "metrange"))
+# Select only metabolites
+metrange <- attr(data.pretreated, "metrange")
+metrange <- metrange[colSums(is.na(data.pretreated[, metrange])) < 2]
 
-#Add longitudinal markers: CRP and PCT
-data.full <- AddCRPAndPCT(data.reduced)
+pca_metabolites <- data.pretreated[!is.na(rowSums(data.pretreated[, metrange])), metrange]
 
-#Add ratios and sums to data.full
-data.full.clean <- AddRatiosAndSums(AddCRPAndPCT(data.clean))
-
-#Log transform and scale metabolite data
-data.full.scaled <- DataPretreatment(data.full.clean, metrange = attr(data.clean, "metrange"), scaling = "auto")
-
-
-metrange <- attr(data.full.scaled, "metrange")
-metrange <- metrange[colSums(is.na(data.full.scaled[, metrange])) < 2]
-
-pca_metabolites <- data.full.scaled[!is.na(rowSums(data.full.scaled[, metrange])), metrange]
+# PCA
 set.seed(123)
 pca_all_times <- prcomp(pca_metabolites)
 
+#Save loadings
 write.csv(pca_all_times[["rotation"]], file = "results/pca_loadings.csv", row.names = T)
 
-pca_data <- data.frame(data.full.scaled[rownames(pca_metabolites), c("day", "subject.id", "hospitalization.time", "curb", "age", "sex")], 
+# Visualize results
+pca_data <- data.frame(data.pretreated[rownames(pca_metabolites), c("day", "subject.id", "hospitalization.time", "curb", "age", "sex")], 
                        pca_all_times$x[, 1:4])
 
 plot_pca_per_timepoint <- pca_data %>% 
   ggplot(aes(x = PC1, y = PC2, color = hospitalization.time)) +
   geom_point() +
-  #scale_color_viridis_c(direction = -1) +
   scale_color_lei(palette = "gradient", discrete = FALSE) +
   facet_grid(~ day) +
   coord_equal() +
@@ -47,7 +40,6 @@ plot_pca_per_timepoint_begin <- pca_data %>%
   mutate(day = factor(day, levels = paste("Day", c(0, 1, 2, 4, 30)))) %>% 
   ggplot(aes(x = PC1, y = PC2, color = subject.id)) +
   geom_point(show.legend = F) +
-  #scale_color_viridis_c(direction = -1) +
   scale_color_lei(palette = "nine", discrete = TRUE) +
   facet_grid(~ day) +
   coord_equal() +
@@ -76,8 +68,6 @@ plot_PC_time_curve <- function(PC = "PC1", color = "subject.id") {
 pca_plot <- pca_data %>% 
   pivot_wider(names_from = day, values_from = c(PC1, PC2, PC3, PC4)) %>% 
   ggplot() +
-  #geom_point(data = pca_data, aes(x = PC1, y = PC2), show.legend = F) +
-
   geom_segment(aes(x = PC1_0, y = PC2_0, xend = PC1_1, yend = PC2_1), show.legend = F, color = lei_colors["orange"]) +
   geom_segment(aes(x = PC1_1, y = PC2_1, xend = PC1_2, yend = PC2_2), show.legend = F, color = lei_colors["orange"]) +
   geom_segment(aes(x = PC1_2, y = PC2_2, xend = PC1_4, yend = PC2_4), show.legend = F, color = lei_colors["orange"]) +
@@ -91,7 +81,6 @@ pca_plot <- pca_data %>%
 pca_plot_curb <- pca_data %>% 
   pivot_wider(names_from = day, values_from = c(PC1, PC2, PC3, PC4)) %>% 
   ggplot(aes(group = subject.id, color = as.factor(curb))) +
-  #geom_point(data = pca_data, aes(x = PC1, y = PC2), show.legend = F) +
   geom_text(data = pca_data, aes(x = PC1, y = PC2, label = day), show.legend = F) +
   geom_segment(aes(x = PC1_0, y = PC2_0, xend = PC1_1, yend = PC2_1)) +
   geom_segment(aes(x = PC1_1, y = PC2_1, xend = PC1_2, yend = PC2_2)) +
@@ -102,8 +91,6 @@ pca_plot_curb <- pca_data %>%
 pca_plot_hosp_time <- pca_data %>% 
   pivot_wider(names_from = day, values_from = c(PC1, PC2, PC3, PC4)) %>% 
   ggplot(aes(group = subject.id, color = hospitalization.time)) +
-  #geom_point(data = pca_data, aes(x = PC1, y = PC2), show.legend = F) +
-  
   geom_segment(aes(x = PC1_0, y = PC2_0, xend = PC1_1, yend = PC2_1)) +
   geom_segment(aes(x = PC1_1, y = PC2_1, xend = PC1_2, yend = PC2_2)) +
   geom_segment(aes(x = PC1_2, y = PC2_2, xend = PC1_4, yend = PC2_4)) +
@@ -139,27 +126,6 @@ pca_plot_sex <- pca_data %>%
   geom_segment(aes(x = PC1_4, y = PC2_4, xend = PC1_30, yend = PC2_30)) +
   geom_text(data = pca_data, aes(x = PC1, y = PC2, label = day), show.legend = F) +
   theme_bw()
-
-
-pdf(file = "results/figures/PCA_time_profiles.pdf", height = 10, width = 10)
-print(pca_plot)
-dev.off()
-
-pca_plot
-ggsave("results/figures/PCA_time_profiles.png", width = 10, height = 10, dpi = 400)
-
-pdf(file = "results/figures/PCA_exploration.pdf", height = 5, width = 7)
-print(pca_plot_hosp_time)
-print(pca_plot_curb)
-print(pca_plot_age)
-print(pca_plot_sex)
-print(pca_plot_facetted)
-print(plot_PC_time_curve("PC1"))
-print(plot_PC_time_curve("PC2"))
-print(plot_PC_time_curve("PC3"))
-print(plot_PC_time_curve("PC4"))
-dev.off()
-
 
 
 #Gather figures

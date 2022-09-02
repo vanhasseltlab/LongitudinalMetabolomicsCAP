@@ -4,21 +4,11 @@ library(readxl)
 source("functions/AllFunctions.R")
 source("functions/LeidenColoring.R")
 
-## Input data -----------------------------------------------------------------
-dat.raw <- read.csv2("data/00_data_raw.csv")
-
-#Data preparation
-# Remove redundant variables from data frame
-data.reduced <- ReduceData(dat.raw)
-#Remove metabolites with to many NAs
-data.clean <- DataCleaning(data.reduced, attr(data.reduced, "metrange"))
-
-#Add longitudinal markers: CRP and PCT and ratios and sums
-data.pc <- AddCRPAndPCT(data.clean)
-data.rs <- AddRatiosAndSums(data.pc)
+# Load data from 01_DataPreparation (data.pretreated)
+load("data/01_data_clean.Rdata")
 
 #Scale metabolite values
-data.pretreated <- DataPretreatment(data.rs, metrange = c(attr(data.rs, "metrange"), attr(data.rs, "ratiorange"))) %>% 
+data.pretreated <- data.pretreated %>% 
   rename(PCT = pct, CRP = crp, CREA = crea)
 
 metrange <- c(attr(data.pretreated, "metrange"), attr(data.pretreated, "ratiorange"))

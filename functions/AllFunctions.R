@@ -89,6 +89,7 @@ ReduceData <- function(data.raw){
   
   return(data.reduced)
 }
+
 DataCleaning <- function(dat, metrange) {
   # This function removes metabolites (columns) with missing values. And patients with
   # death outcome
@@ -109,6 +110,7 @@ DataCleaning <- function(dat, metrange) {
   
   return(dat.clean)
 }
+
 DataPretreatment <- function(dat, metrange, scaling = "auto") {
   # This function applies log transformation and auto or pareto scaling to metabolite data
   nonmetrange <-  setdiff(names(dat), metrange)
