@@ -3,6 +3,8 @@
 # Load libraries
 library(tidyverse)
 library(readxl)
+library(foreign)
+library(openxlsx)
 
 # Source functions
 source("functions/LeidenColoring.R")
@@ -49,7 +51,7 @@ cluster_plot <- long_cluster %>%
   geom_line(aes(group = metabolite, y = spline), alpha = 0.1) +
   geom_line(data = centroids, aes(y = centroid), size = 1.3) +
   scale_color_lei(palette = "five") +
-  labs(color = "Cluster", x = "Time (days)", y = "Splines over patients\n(scaled metabolite values)") +
+  labs(color = "Cluster", x = "Time (days)", y = "Splines over patients\n(scaled metabolite levels)") +
   theme_bw()
 
 #check number of metabolites per cluster
@@ -67,13 +69,14 @@ write.csv(metabolite_class, file = "results/kmeans_clusters_metabolites.csv", ro
 #### Visualize metabolite classes per cluster #####
 plot_metabolite_class <- metabolite_class %>% 
   filter(!is.na(class)) %>% 
+  filter(class != "Sums and ratios") %>% 
   left_join(metabolite_class) %>% 
   ggplot(aes(x = class, fill = as.factor(cluster))) +
   geom_bar() +
   scale_x_discrete(guide = guide_axis(angle = 90)) +
   scale_fill_lei(palette = "five") +
   scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
-  labs(x = "Metabolite class", y = "Count", fill = "Cluster") +
+  labs(x = "Metabolite class", y = "Number of metabolites", fill = "Cluster") +
   theme_bw()
 
 #### Clustered metabolite profiles per patient ####
@@ -129,7 +132,7 @@ plot_patient_clusters <- plot_data %>%
   facet_wrap(~ subject.id, scales = "free_y") +
   scale_color_lei(palette = "five") +
   scale_x_time_squish() +
-  labs(x = "Time (days)", y = "Cluster of scaled metabolite values", color = "Cluster") +
+  labs(x = "Time (days)", y = "Splines over each cluster within patients (scaled metabolite levels)", color = "Cluster") +
   theme_bw()
 
 #### Spline CRP ####
@@ -210,27 +213,31 @@ cluster_plot_class_facets <- long_cluster %>%
   left_join(metabolite_class) %>% 
   filter(!is.na(class)) %>% 
   filter(!class %in% small_classes) %>% 
+  filter(class != "Sums and ratios") %>% 
   mutate(class = gsub("-", "- ", class)) %>% 
   mutate(class = gsub("phosphatidyl", "phosphatidyl ", class)) %>% 
   ggplot(aes(x = day)) +
-  geom_line(aes(y = spline, group = metabolite, color = as.factor(class)), alpha = 0.5) +
-  geom_line(data = long_class %>% filter(!class %in% small_classes) %>% 
+  geom_line(aes(y = spline, group = metabolite, color = as.factor(cluster)), alpha = 0.5) +
+  geom_line(data = long_class %>% filter(!class %in% small_classes) %>% filter(class != "Sums and ratios") %>% 
               mutate(class = gsub("-", "- ", class)) %>% 
               mutate(class = gsub("phosphatidyl", "phosphatidyl ", class)), 
-            aes(y = spline), color = "black", show.legend = F) +
+            aes(y = spline), color = "black", show.legend = F, linetype = "dashed") +
   facet_wrap(~ class, labeller = labeller(class = label_wrap_gen(15))) +
   scale_x_time_squish() +
+  scale_color_lei(palette = "five") +
+  labs(x = "Time (days)", y = "Splines over patients (scaled metabolite levels)") +
   theme_bw() +
   theme(legend.position = "none") 
 
 
 #Gather figures
 figure2 <- cluster_plot
-figureS1 <- plot_metabolite_class
-figureS2 <- cluster_plot_class_facets
-figureS3 <- plot_patient_clusters
-figure3b <- lpc_plot
+figure3 <- plot_patient_clusters
+figure4a <- plot_metabolite_class
+figure4b <- cluster_plot_class_facets
+figure5b <- lpc_plot
+
 tableS2 <- select(metabolite_class, -metabolite)
 
 
-save(figure2, figureS1, figureS2, figureS3, figure3b, tableS2, file = "manuscript/figures/plots_Kmeans.Rdata")
+save(figure2, figure3, figure4a, figure4b, figure5b, tableS2, file = "manuscript/figures/plots_Kmeans.Rdata")

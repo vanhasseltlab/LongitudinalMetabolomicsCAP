@@ -71,6 +71,7 @@ boxplot_curb_score_selection <- data.pretreated %>%
   ggplot(aes(x = curb, y = value, group = metabolite)) +
   geom_boxplot(aes(x = as.factor(curb), group =  as.factor(curb))) +
   facet_wrap(~ metabolite, scales = "free_y", labeller = labeller(metabolite = facet_names),  nrow = 2) +
+  labs(y = "Scaled metabolite level", x = "CURB score") +
   theme_bw()
 
 #####
@@ -205,11 +206,11 @@ highest_cor_hosp_time <- data_figure4b %>%
   theme_bw()
 
 #Gather figures
-figure3a <- plot_correlation_heatmap(cor_all, variables = c("CRP", "PCT"), var_tdp = c("CRP", "PCT"),)
-figureS4 <- plot_correlation_heatmap(cor_all, var_tdp = c("CREA", "CRP", "PCT"), add = c("CRP", "PCT", "CREA"))
-figure4a <- hosp_metabolite_cor
-figure4b <- highest_cor_hosp_time
-figureS5 <- boxplot_curb_score_selection
+figure5a <- plot_correlation_heatmap(cor_all, variables = c("CRP", "PCT"), var_tdp = c("CRP", "PCT"),)
+figureS2 <- plot_correlation_heatmap(cor_all, var_tdp = c("CREA", "CRP", "PCT"), add = c("CRP", "PCT", "CREA"))
+figure7a <- hosp_metabolite_cor
+figure7b <- highest_cor_hosp_time
+figure6 <- boxplot_curb_score_selection
 
-save(figure3a, figureS4, figureS5, figure4a, figure4b, file = "manuscript/figures/plots_correlations.Rdata")
+save(figure5a, figureS2, figure6, figure7a, figure7b, file = "manuscript/figures/plots_correlations.Rdata")
 
