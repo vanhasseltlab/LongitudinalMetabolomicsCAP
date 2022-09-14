@@ -72,7 +72,8 @@ boxplot_curb_score_selection <- data.pretreated %>%
   geom_boxplot(aes(x = as.factor(curb), group =  as.factor(curb))) +
   facet_wrap(~ metabolite, scales = "free_y", labeller = labeller(metabolite = facet_names),  nrow = 2) +
   labs(y = "Scaled metabolite level", x = "CURB score") +
-  theme_bw()
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))
 
 #####
 ###Heatmap only PCT and CRP
@@ -128,19 +129,6 @@ plot_correlation_heatmap <- function(correlation_matrix,
 }
 
 # Plot correlations:
-#pdf("results/figures/CRP_metabolites_top10.pdf", width = 10)
-print(dat_met_tdp %>% 
-        pivot_longer(-c(subject.id, day, CRP), names_to = "metabolite") %>%
-        filter(metabolite %in% cor_all$metabolite[abs(cor_all$CRP) > 0.6]) %>% 
-        #mutate(metabolite = factor(metabolite, levels = top_and_bottom)) %>% 
-        ggplot(aes(x = CRP, y = value, group = metabolite)) +
-        geom_smooth(aes(x = CRP), se = FALSE, method = "lm", alpha = 0.5) +
-        geom_point() +
-        scale_x_discrete(guide = guide_axis(angle = 90)) +
-        labs(x = "C-reactive protein (CRP)", y = "Metabolite level", size = 20) +
-        facet_wrap(~ metabolite, scales = "free_y") +
-        theme_bw())
-#dev.off()
 dat_cor_plot <- plot_correlation_heatmap(cor_all, variables = grep("hospitalization.time", names(cor_all), value = T), 
                                          just_data = T, add = c("CRP", "PCT"))
 intercepts <- sort(which(colnames(dat_cor_plot$m)[dat_cor_plot$clust$order] %in% c("CRP", "PCT")))
@@ -180,18 +168,6 @@ data_figure4b <- data.pretreated %>%
          `0` = 0) %>% 
   pivot_longer(all_of(as.character(c(0, 1, 2, 4, 30))), names_to = "day")
 
-data_figure4b %>% 
-  mutate(day = as.numeric(day)) %>% 
-  #filter(day != 30) %>% 
-  #filter(day %in% c(0, 2)) %>% 
-  ggplot(aes(x = day, y = value, color = hospitalization.time)) +
-  geom_point() +
-  geom_line(aes(group = subject.id)) +
-  scale_color_lei(discrete = F, palette = "gradient2") +
-  scale_x_time_squish() +
-  facet_grid(~ metabolite) +
-  theme_bw()
-
 rownames(names_and_class) <- names_and_class$metabolite
 highest_cor_hosp_time <- data_figure4b %>% 
   left_join(names_and_class) %>%
@@ -203,7 +179,8 @@ highest_cor_hosp_time <- data_figure4b %>%
   labs(x = "Length of stay", y = "Change in metabolite value from day 0 to day 2") +
   scale_color_lei(discrete = T, palette = "nine") +
   facet_wrap(~ name, nrow = 2) +
-  theme_bw()
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))
 
 #Gather figures
 figure5a <- plot_correlation_heatmap(cor_all, variables = c("CRP", "PCT"), var_tdp = c("CRP", "PCT"),)

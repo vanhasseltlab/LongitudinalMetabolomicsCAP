@@ -24,41 +24,21 @@ percentage_explained <-  round(summary(pca_all_times)$importance[2, 1:2]*100, 1)
 write.csv(pca_all_times[["rotation"]], file = "results/pca_loadings.csv", row.names = T)
 
 # Visualize results
-pca_data <- data.frame(data.pretreated[rownames(pca_metabolites), c("day", "subject.id", "hospitalization.time", "curb", "age", "sex")], 
+pca_data <- data.frame(data.pretreated[rownames(pca_metabolites), c("day", "subject.id", "hospitalization.time", "curb")], 
                        pca_all_times$x[, 1:4])
 
 plot_pca_per_timepoint <- pca_data %>% 
   mutate(day = paste("Day", day)) %>% 
   mutate(day = factor(day, levels = paste("Day", c(0, 1, 2, 4, 30)))) %>% 
-  ggplot(aes(x = PC1, y = PC2, color = subject.id)) +
-  geom_point(show.legend = F) +
-  scale_color_lei(palette = "nine", discrete = TRUE) +
+  ggplot(aes(x = PC1, y = PC2)) +
+  geom_point(show.legend = F, color = "black", alpha = 0.7, stroke = 0, size = 2) +
   facet_grid(~ day) +
   labs(x = paste0("PC1 (", percentage_explained[1], "%)"), 
        y = paste0("PC2 (", percentage_explained[2], "%)")) +
   coord_equal() +
   theme_bw() +
-  theme(legend.position = "bottom")
-
-missing_links <- pca_data %>%
-  arrange(subject.id, day) %>% 
-  mutate(missing = FALSE) %>% 
-  right_join(data.frame(day = rep(unique(pca_data$day), length(unique(pca_data$subject.id))),
-                        subject.id = rep(unique(pca_data$subject.id), each = length(unique(pca_data$day))))) %>% 
-  mutate(missing = ifelse(is.na(missing), TRUE, FALSE)) %>%
-  arrange(subject.id, day)
-
-missing_links$add1 <- c(missing_links$missing[2:nrow(missing_links)], FALSE)
-missing_links$add2 <- c(FALSE, missing_links$missing[1:(nrow(missing_links) - 1)])
-
-
-missing_links2 <- missing_links %>% group_by(subject.id) %>% 
-  mutate(max_day = max(day[missing_links])) %>% 
-  filter(sum(missing) != 0) %>% 
-  filter(!(missing == TRUE & day == 0)) %>% 
-  filter(!(missing == TRUE & day == 30)) %>% 
-  ungroup()
-
+  theme(legend.position = "bottom") +
+  theme(strip.background = element_rect(fill = "white"))
 
 plot_pca_individuals <- pca_data %>% 
   pivot_wider(names_from = day, values_from = c(PC1, PC2, PC3, PC4)) %>% 
@@ -71,7 +51,8 @@ plot_pca_individuals <- pca_data %>%
   facet_wrap(~ subject.id) +
   labs(x = "PC1", y = "PC2") +
   coord_equal() +
-  theme_bw()
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))
 
 
 #Gather figures

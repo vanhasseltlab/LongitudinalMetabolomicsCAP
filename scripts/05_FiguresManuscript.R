@@ -6,7 +6,7 @@ library(tidyverse)
 #Figures from Kmeans script
 load("manuscript/figures/plots_Kmeans.Rdata")
 
-png(filename = "manuscript/figures/figure2.png", res = 600, width = 6, height = 3.5, units = "in")
+png(filename = "manuscript/figures/figure2.png", res = 600, width = 8, height = 3.5, units = "in")
 print(figure2)
 dev.off()
 

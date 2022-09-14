@@ -47,12 +47,17 @@ centroids <- as.data.frame(kmeans_result$centers) %>%
 ### Visualize clusters ####
 cluster_plot <- long_cluster %>% 
   ggplot(aes(x = day, color = as.factor(cluster))) +
-  geom_point(aes(y = spline)) +
-  geom_line(aes(group = metabolite, y = spline), alpha = 0.1) +
-  geom_line(data = centroids, aes(y = centroid), size = 1.3) +
+  geom_point(aes(y = spline), stroke = 0) +
+  geom_line(aes(group = metabolite, y = spline), alpha = 0.3) +
+  geom_line(data = centroids, aes(y = centroid), color = "white") +
+  geom_line(data = centroids, aes(y = centroid, linetype = "centroid"), color = "black") +
   scale_color_lei(palette = "five") +
+  scale_x_time_squish() +
+  scale_linetype_manual(name = "Centroid", values = c('centroid' = 'dashed'), labels = c("")) +
   labs(color = "Cluster", x = "Time (days)", y = "Splines over patients\n(scaled metabolite levels)") +
-  theme_bw()
+  facet_grid(~ cluster) +
+  theme_bw() +
+  theme(strip.background = element_blank(), strip.text.x = element_blank())
 
 #check number of metabolites per cluster
 table(spline_data$cluster)
@@ -67,16 +72,20 @@ metabolite_class <- long_cluster %>%
 write.csv(metabolite_class, file = "results/kmeans_clusters_metabolites.csv", row.names = F)
 
 #### Visualize metabolite classes per cluster #####
+table_classes <- sort(table(metabolite_class$class))
+small_classes <- names(table_classes[table_classes < 3])
+
 plot_metabolite_class <- metabolite_class %>% 
   filter(!is.na(class)) %>% 
   filter(class != "Sums and ratios") %>% 
+  filter(!class %in% small_classes) %>% 
   left_join(metabolite_class) %>% 
-  ggplot(aes(x = class, fill = as.factor(cluster))) +
+  mutate(class = factor(class, levels = names(sort(table(metabolite_class$class))))) %>% 
+  ggplot(aes(y = class, fill = as.factor(cluster))) +
   geom_bar() +
-  scale_x_discrete(guide = guide_axis(angle = 90)) +
   scale_fill_lei(palette = "five") +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
-  labs(x = "Metabolite class", y = "Number of metabolites", fill = "Cluster") +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(y = "Biochemical metabolite class", x = "Number of metabolites", fill = "Cluster") +
   theme_bw()
 
 #### Clustered metabolite profiles per patient ####
@@ -120,7 +129,7 @@ for (patient in patients) {
 plot_data <- spline_patient %>% 
   pivot_longer(-c(subject.id, cluster), names_prefix = "V", names_to = "day") %>% 
   mutate(day = as.numeric(day)) %>%
-  left_join(data.pretreated %>% select(subject.id, curb, age, hospitalization.time) %>% distinct()) %>% 
+  left_join(data.pretreated %>% select(subject.id, curb, hospitalization.time) %>% distinct()) %>% 
   filter(!is.na(value))
 
 plot_patient_clusters <- plot_data %>% 
@@ -133,7 +142,8 @@ plot_patient_clusters <- plot_data %>%
   scale_color_lei(palette = "five") +
   scale_x_time_squish() +
   labs(x = "Time (days)", y = "Splines over each cluster within patients (scaled metabolite levels)", color = "Cluster") +
-  theme_bw()
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white"))
 
 #### Spline CRP ####
 infl.markers.longitudinal <- read.spss("data/raw/aanvullende data ilona 1762021.sav", 
@@ -227,7 +237,7 @@ cluster_plot_class_facets <- long_cluster %>%
   scale_color_lei(palette = "five") +
   labs(x = "Time (days)", y = "Splines over patients (scaled metabolite levels)") +
   theme_bw() +
-  theme(legend.position = "none") 
+  theme(legend.position = "none", strip.background = element_rect(fill = "white")) 
 
 
 #Gather figures
