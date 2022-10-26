@@ -39,7 +39,6 @@ save(data.pretreated, file = "data/01_data_clean.Rdata")
 write.table(data.pretreated, file = "data/01_data_clean.csv", row.names = FALSE, quote = T, sep = ",")
 
 
-
 #Create table for patient characteristics
 ## Patient characteristics ---
 patient_chars <- c("age", "sex", "curb", "renal.disease", "congestive.heart.failure",

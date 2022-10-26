@@ -363,3 +363,47 @@ AddRatiosAndSums <- function(data.clean) {
   return(data.ratios)
 }
 
+PlotCorrelationHeatmap <- function(correlation_matrix, 
+                                     variables = names(correlation_matrix)[-1], 
+                                     var_tdp = NULL, add = NULL, just_data = FALSE) {
+  heatmap_dat_3 <- correlation_matrix %>% 
+    pivot_longer(-metabolite, names_to = "marker", values_to = "correlation") %>% 
+    filter(marker %in% variables) %>% 
+    filter(metabolite %in% c(setdiff(metabolite[abs(correlation) > 0.55], variables), add)) %>% 
+    left_join(names_and_class) %>% 
+    mutate(name = ifelse(is.na(name), metabolite, name)) %>% 
+    mutate(marker = factor(marker, levels = variables, 
+                           labels = gsub("_", " - ", gsub(".", " ", variables, fixed = T), fixed = T))) %>% 
+    mutate(group = ifelse(as.character(marker) %in% var_tdp, "Biomarker", gsub("[\\ \\-\\ ].*", "", marker))) %>% 
+    mutate(hor_facet = ifelse(name %in% add, "1", "0")) %>% 
+    distinct()
+  
+  m <- as.matrix(heatmap_dat_3 %>% select(name, marker, correlation) %>% 
+                   pivot_wider(names_from = name, values_from = correlation) %>% 
+                   select(-marker))
+  clust <- hclust(dist(t(m)))
+  
+  if (just_data) {
+    return(list(data = heatmap_dat_3, m = m, clust = clust))
+  }
+  corposterplot <- heatmap_dat_3 %>% 
+    ggplot(aes(y = name, x = marker)) +
+    geom_tile(aes(fill = as.numeric(correlation)))+
+    scale_fill_gradient2(name = "Correlation", low = "#001158", high = "#F54C00",
+                         limits = c(-1, 1), breaks = seq(-1, 1, 0.25), labels = seq(-1, 1, 0.25))+
+    scale_x_discrete(guide = guide_axis(angle = 90), expand = expansion(mult  = c(0, 0))) +
+    scale_y_discrete(expand = expansion(mult  = c(0, 0)), limits= colnames(m)[clust$order]) +
+    facet_grid(. ~ group, scales = "free", space='free') +
+    labs(x = NULL, y = "Metabolite") +
+    theme_bw() +
+    theme(strip.background = element_blank(), strip.text = element_blank())
+  
+  if (is.null(add)) {
+    return(corposterplot)
+  } else {
+    intercepts <- sort(which(colnames(m)[clust$order] %in% add))
+    return(corposterplot + geom_hline(yintercept = c(intercepts - 0.5, intercepts + 0.5)) )
+  }
+}
+
+
