@@ -34,11 +34,54 @@ loadings <- data.frame(metabolite = colnames(pca_metabolites), t(t(pca_all_times
   mutate(PC1 = -PC1) %>% #mirror PC1
   mutate(weights = sqrt(PC1^2 + PC2^2)) %>% 
   left_join(names_and_class) %>% 
-  arrange(class, desc(weights))
+  arrange(class, desc(weights)) %>% 
+  mutate(var_explained_PC1 = PC1^2/sum(PC1^2),
+         var_explained_PC2 = PC2^2/sum(PC2^2))
 
 #variance explained by time component
 lm_time <- lm(day ~ poly(PC1, 2, raw = TRUE) + poly(PC2, 2, raw = TRUE), data = pca_data)
 variance_explained <- summary(lm_time)$adj.r.squared
+lm_time
+
+#variance explained by each class
+class_var_explained <- loadings %>% group_by(class) %>% 
+  summarize(var_explained_PC1 = sum(var_explained_PC1),
+            var_explained_PC2 = sum(var_explained_PC2))
+
+class_var_explained %>% 
+  pivot_longer(-class, names_to = "PC", values_to = "expl_var", names_prefix = "var_explained_") %>% 
+  ggplot(aes(y = class, x = expl_var)) +
+  geom_point() +
+  facet_grid(~ PC) +
+  theme_bw()
+
+# cholesteryl esters, LPC's, sphingomyelins, diacylglycerols, and triglycerides 
+class_var_explained %>% 
+  filter(class %in% c("Cholesteryl esters", "Lysophospholipids", "Sphingomyelin", "Diacylglycerols", "Triglycerides")) %>% 
+  select(-class) %>% colSums %>% mean()*100
+
+##more plots
+pca_data %>% 
+  ggplot(aes(x = PC1, y = rank(day))) +
+  geom_point() +
+  theme_bw()
+
+pca_data %>% 
+  ggplot(aes(x = PC2, y = rank(day))) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  theme_bw()
+
+pca_data %>% 
+  ggplot(aes(x = 0.98376*PC1 + 0.05026*PC1^2, y = day)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  theme_bw()
+
+
+lm_time <- lm(rank(day) ~ PC1 + PC2, data = pca_data)
+variance_explained <- summary(lm_time)$adj.r.squared
+lm_time
 
 # Visualize results
 plot_pca_per_timepoint <- pca_data %>% 
@@ -116,7 +159,23 @@ plot_weights_pca <- loadings %>%
   scale_color_lei(palette = "nine", discrete = T) +
   scale_x_continuous(limits = c(0, 1), expand = expansion(mult = c(0, 0.05))) +
   scale_y_discrete(limits=rev) +
-  labs(x = "Importance in PCA (loadings)", y = "Biochemical class") +
+  labs(x = "Importance in PCA (absolute loadings)", y = "Biochemical class") +
+  facet_wrap(~ PC) +
+  theme_bw() +
+  theme(plot.margin = unit(c(5.5, 15.5, 5.5, 5.5), "points"))+
+  theme(strip.background = element_rect(fill = "white")) 
+
+plot_weights_pca_alt <- loadings %>% 
+  filter(!class %in% small_classes) %>% 
+  pivot_longer(c(PC1, PC2), names_to = "PC") %>% 
+  ggplot(aes(y = class, x = (value)^2*100, color = class)) +
+  geom_boxplot(show.legend = F) +
+  geom_vline(xintercept = 0.5^2*100, color = "grey65", alpha = 0.3) +
+  scale_fill_lei(palette = "nine", discrete = T) +
+  scale_color_lei(palette = "nine", discrete = T) +
+  scale_x_continuous(limits = c(0, 80), expand = expansion(mult = c(0, 0.05))) +
+  scale_y_discrete(limits=rev) +
+  labs(x = "Importance in PCA (variance accounted for)", y = "Biochemical class") +
   facet_wrap(~ PC) +
   theme_bw() +
   theme(plot.margin = unit(c(5.5, 15.5, 5.5, 5.5), "points"))+
@@ -126,9 +185,10 @@ plot_weights_pca <- loadings %>%
 #Gather figures
 figure1 <- plot_pca_per_timepoint
 figureS1 <- plot_pca_individuals
+figureS2 <- plot_pc_over_time
 figure2a <- plot_weights_pca
 figure2b <- plot_abclass_PC
 
 
-save(figure1, figureS1, figure2a, figure2b, file = "manuscript/figures/plots_PCA.Rdata")
+save(figure1, figureS1, figureS2, figure2a, figure2b, file = "manuscript/figures/plots_PCA.Rdata")
 

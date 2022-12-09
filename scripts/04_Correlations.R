@@ -62,17 +62,19 @@ cor_all_names <- cor_all %>%
 facet_names <- paste0(cor_all_names$name, " \ntau = ", round(cor_all_names$curb_day30, 3))
 names(facet_names) <- cor_all_names$metabolite
 
-boxplot_curb_score_selection <- data.pretreated %>%
-  distinct(subject.id, .keep_all = T) %>% 
-  pivot_longer(c(all_of(metrange), CRP, PCT, CREA), names_to = "metabolite") %>% 
+boxplot_curb_score_selection <- data.eng %>%
+  select(all_of(paste0("day30_0_", selected_metabolites)), subject.id, curb) %>% 
+  pivot_longer(-c(subject.id, curb), names_to = "metabolite") %>% 
+  mutate(metabolite = gsub("day30_0_", "", metabolite)) %>% 
   mutate(metabolite = factor(metabolite, levels = selected_metabolites)) %>% 
-  filter(metabolite %in% selected_metabolites) %>% 
+  filter(!is.na(value)) %>% 
   ggplot(aes(x = curb, y = value, group = metabolite)) +
   geom_boxplot(aes(x = as.factor(curb), group =  as.factor(curb))) +
   facet_wrap(~ metabolite, scales = "free_y", labeller = labeller(metabolite = facet_names),  nrow = 2) +
-  labs(y = "Scaled metabolite level", x = "CURB score") +
+  labs(y = expression("Change in metabolite value ("*m["t="*30]*" - "*m["t="*0]*")"), x = "CURB score") +
   theme_bw() +
   theme(strip.background = element_rect(fill = "white"))
+
 
 ###Heatmaps
 # Plot correlations:
@@ -123,18 +125,35 @@ highest_cor_hosp_time <- data_figure4b %>%
   ggplot(aes(x = hospitalization.time, y = value)) +
   geom_smooth(method = "lm", se = F, color = "grey55", size = 0.8) +
   geom_point() +
-  labs(x = "Length of stay", y = "Change in metabolite value from day 0 to day 2") +
+  labs(x = "Length of stay", y = expression("Change in metabolite value ("*m["t="*2]*" - "*m["t="*0]*")")) +
   scale_color_lei(discrete = T, palette = "nine") +
   facet_wrap(~ name, nrow = 2) +
   theme_bw() +
   theme(strip.background = element_rect(fill = "white"))
 
+
+names(cor_all) <- gsub("hospitalization.time", "Length of stay", names(cor_all))
+names(cor_all) <- gsub("curb", "CURB", names(cor_all))
+
+
+day_names <- names(cor_all)[grepl("day", names(cor_all))]
+labels_sub <- character()
+for (lab in day_names) {
+  lab1 <- gsub("_.*", "", lab, fixed = F)
+  day <- gsub(paste0(lab1, "_day"), "", lab)
+  
+  labels_sub <- c(labels_sub, bquote(.(lab1)~"~ m"[paste("t=", bold(.(day)))]~"- m"["t=0"]))
+}
+names(labels_sub) <- gsub("_", " - ", gsub(".", " ", day_names, fixed = T), fixed = T)
+
 #Gather figures
 figure3a <- PlotCorrelationHeatmap(cor_all, variables = c("CRP", "PCT"), var_tdp = c("CRP", "PCT"),)
-figureS2 <- PlotCorrelationHeatmap(cor_all, var_tdp = c("CREA", "CRP", "PCT"), add = c("CRP", "PCT", "CREA"))
+figureS3 <- PlotCorrelationHeatmap(cor_all, var_tdp = c("CREA", "CRP", "PCT"), add = c("CRP", "PCT", "CREA")) +
+  scale_x_discrete(guide = guide_axis(angle = 90), expand = expansion(mult  = c(0, 0)),
+                   labels = labels_sub)
 figure5a <- hosp_metabolite_cor
 figure5b <- highest_cor_hosp_time
 figure4 <- boxplot_curb_score_selection
 
-save(figure3a, figureS2, figure4, figure5a, figure5b, file = "manuscript/figures/plots_correlations.Rdata")
+save(figure3a, figureS3, figure4, figure5a, figure5b, file = "manuscript/figures/plots_correlations.Rdata")
 

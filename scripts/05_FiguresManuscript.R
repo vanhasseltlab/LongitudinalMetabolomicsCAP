@@ -15,8 +15,8 @@ png(filename = "manuscript/figures/figure5.png", res = 600, width = 10.05, heigh
 grid.arrange(figure5a + labs(tag = "(A)"), figure5b + labs(tag = "(B)"), layout_matrix = t(c(1, 2)))
 dev.off()
 
-png(filename = "manuscript/figures/figureS2.png", res = 300, width = 6, height = 9, units = "in")
-print(figureS2)
+png(filename = "manuscript/figures/figureS3.png", res = 300, width = 6, height = 9, units = "in")
+print(figureS3)
 dev.off()
 
 png(filename = "manuscript/figures/figure4.png", res = 600, width = 6, height = 4, units = "in")
@@ -38,9 +38,11 @@ png(filename = "manuscript/figures/figureS1.png", res = 300, width = 0.75*9, hei
 print(figureS1)
 dev.off()
 
+png(filename = "manuscript/figures/figureS2.png", res = 300, width = 0.75*9, height = 7, units = "in")
+print(figureS2)
+dev.off()
 
 png(filename = "manuscript/figures/figure2.png", res = 600, width = 7, height = 11, units = "in")
 grid.arrange(figure2a + labs(tag = "(A)"), figure2b + labs(tag = "(B)"), layout_matrix = matrix(c(1, 1, 2, 2, 2, 2)))
 dev.off()
-
 
